@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<properties>
+  <useAuthv1>false</useAuthv1>
+  <useAuthv4>true</useAuthv4>
+
+  <!-- 게임 빌드 식별자 (Windows / Microsoft Store) -->
+  <appId>com.gcp2.stepbystep.windows.microsoftstore.global.normal</appId>
+
+  <!-- 게임 언어 설정. 게임 진입 시 명시적으로 선택 -->
+  <gameLanguage>en</gameLanguage>
+
+  <!-- Custom UI 설정. false 이면 Hive SDK 기본 UI 사용 -->
+  <useCustomUI>
+    <signIn>false</signIn>
+    <connect>false</connect>
+    <achievement>false</achievement>
+    <syncAccount>false</syncAccount>
+  </useCustomUI>
+
+  <!-- ageGate 설정 SKIP -->
+  <ageGateU13>false</ageGateU13>
+
+  <!-- zone 설정. 현재 test 서버 사용 -->
+  <zone>test</zone>
+
+  <!-- Hive SDK 내부 동작 로그 사용 여부 -->
+  <useLog>true</useLog>
+
+  <!-- 푸시 설정. 현재 PC 버전은 Push 지원하지 않으므로 SKIP -->
+  <usePush>false</usePush>
+
+  <!-- 회사 설정 (컴투스 : C2S). 초기화 시 서버에서 appId 기반으로 설정됨 -->
+  <company>C2S</company>
+
+  <!-- 채널 설정 -->
+  <channel>HIVE</channel>
+
+  <!-- 마켓 설정. 현재 PC 버전은 마켓 결제 미지원이라 SKIP -->
+  <market>AP</market>
+
+  <!-- 현재 설정 그대로 사용. 변경 불필요 -->
+  <httpConnectTimeout>10</httpConnectTimeout>
+  <httpReadTimeout>15</httpReadTimeout>
+  <maxGameLogSize>50</maxGameLogSize>
+  <analyticsSendLimit>120</analyticsSendLimit>
+  <analyticsQueueLimit>1200</analyticsQueueLimit>
+  <analyticsSendCycle>1</analyticsSendCycle>
+  <hivePermissionViewOn>true</hivePermissionViewOn>
+
+  <!-- iOS 상위 스킴 로그인 전용 프로퍼티 -->
+  <universalLink>https://hiveota.withhive.com/hivesdk/normal/</universalLink>
+
+  <!-- 개발자 사이트 값을 참고하여 설정 -->
+  <providers>
+    <facebook id="433959557354151" />
+    <google clientId="146595918488-d2btsscom6g4106u58i0famhhl52b91a.apps.googleusercontent.com" />
+    <signinwithapple serviceid="com.gcp2.stepbystep.apple.service" />
+  </providers>
+</properties>

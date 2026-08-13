@@ -78,6 +78,14 @@ ProjectSettings/Packages/com.unity.polybrush/Settings.json
 Assets/Polybrush Data*
 Assets/PolybrushData*
 
+# Hive SDK is a vendor drop (~816MB of native binaries, incl. two 211MB libcef.dll).
+# Import the Hive_SDK_v4 unitypackage into the project instead of tracking it here.
+# MiniJSON ships inside the same package, so it is excluded too.
+/Assets/Hive_SDK_v4/
+/Assets/Hive_SDK_v4.meta
+/Assets/MiniJSON/
+/Assets/MiniJSON.meta
+
 # Asset Bundles folder and .bin file
 /Assets/StreamingAssets
 *.bin

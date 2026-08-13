@@ -17,7 +17,25 @@ public class InitializationLoader : MonoBehaviour
 	[Header("Broadcasting on")]
 	[SerializeField] private AssetReference _menuLoadChannel = default;
 
-	private void Start()
+	private bool _bootStarted;
+
+	//Booting is kicked off from the first Update, not Start, because the Hive SDK refuses to run
+	//setup() until the scene has finished initializing
+	private void Update()
+	{
+		if (_bootStarted)
+			return;
+
+		_bootStarted = true;
+
+		//Players have to be signed in through Hive before the game boots
+		if (HiveLoginGate.IsRequired())
+			HiveLoginGate.SignIn(Boot);
+		else
+			Boot();
+	}
+
+	private void Boot()
 	{
 		//Load the persistent managers scene
 		_managersScene.sceneReference.LoadSceneAsync(LoadSceneMode.Additive, true).Completed += LoadEventChannel;
