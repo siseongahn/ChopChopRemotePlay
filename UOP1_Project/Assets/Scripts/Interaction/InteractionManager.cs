@@ -23,6 +23,13 @@ public class InteractionManager : MonoBehaviour
 
 	private LinkedList<Interaction> _potentialInteractions = new LinkedList<Interaction>(); //To store the objects we the player could potentially interact with
 
+	private Protagonist _protagonist;
+
+	private void Awake()
+	{
+		_protagonist = GetComponent<Protagonist>();
+	}
+
 	private void OnEnable()
 	{
 		_inputReader.InteractEvent += OnInteractionButtonPress;
@@ -58,6 +65,15 @@ public class InteractionManager : MonoBehaviour
 	{
 		if (_potentialInteractions.Count == 0)
 			return;
+
+		//Interacting wins over swinging. The prompt on the HUD is clicked with the same button that
+		//attacks, and the StateMachine looks at attacking before it looks at picking something up, so the
+		//swing would take the turn and the item would stay on the ground. Talking and cooking escape that
+		//by moving the input off the gameplay map below, picking up has nothing to move.
+		//The attack cannot be headed off - it is already cached by the time a click is delivered - so it
+		//is taken back instead, which is what this is for.
+		if (_protagonist != null)
+			_protagonist.ConsumeAttackInput();
 
 		currentInteractionType = _potentialInteractions.First.Value.type;
 
