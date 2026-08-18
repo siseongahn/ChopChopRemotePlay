@@ -20,11 +20,16 @@ using AOT;
 /// build folder. Parsing stays platform-agnostic so it compiles and reads the same everywhere.
 public static class HiveRemotePlayEvents
 {
-	//The plugin reports touches in a fixed stream space rather than in the game's own pixels. Measured
-	//by tapping the four corners of the stream: the extremes came back just inside 1680x1050, which is
-	//exactly 1.6 like the client area, so touches map onto the client with no letterboxing.
-	public const float StreamWidth = 1680f;
-	public const float StreamHeight = 1050f;
+	/// How much bigger the stream is than the game's own resolution.
+	///
+	/// One to one: the plugin reports touches in the same pixels the game renders in, which is what you
+	/// would expect of a streamer that captures the game's own swapchain. Tapping the four corners put
+	/// the extremes just inside 1680x1050, and Screen reads 1680x1050 to match.
+	///
+	/// Beware of measuring this against a win32 client rect. Windows virtualizes those for a process
+	/// that has not declared itself DPI aware, so at 150% scaling GetClientRect answers 1120x700 for the
+	/// same window - which reads as a 1.5x stream that is not there.
+	public static float StreamScale = 1f;
 
 	[RuntimeInitializeOnLoadMethod]
 	private static void Register()

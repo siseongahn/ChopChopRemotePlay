@@ -37,6 +37,7 @@ public class RemotePlayInputRouter : MonoBehaviour
 	//What windows counts as one notch of the wheel, which is the scale the input system expects too
 	private const float WheelNotch = 120f;
 
+
 	private static readonly ConcurrentQueue<Event> s_Queue = new ConcurrentQueue<Event>();
 	private static RemotePlayInputRouter s_Instance;
 
@@ -54,6 +55,10 @@ public class RemotePlayInputRouter : MonoBehaviour
 
 	private bool _mouseButtonHeld;
 	private MouseButton _heldMouseButton;
+
+	//What the last touch was mapped under, so only changes get reported rather than every touch
+	private string _lastSituation;
+	private bool _lastScreenUsable = true;
 
 	/// Brings the router up without a scene object to hang it on: it only exists to relay input, and the
 	/// Initialization scene that would otherwise host it is unloaded once the game boots.
@@ -102,13 +107,43 @@ public class RemotePlayInputRouter : MonoBehaviour
 	{
 		bool keysChanged = false;
 
+		//Windows locking, or the game being switched away from, can leave the window with no size worth
+		//mapping against. A touch measured off that lands somewhere meaningless, so the pointer is let go
+		//of instead and the gesture dropped. Keys do not depend on the screen and carry on.
+		bool screenUsable = Screen.width > 0 && Screen.height > 0;
+
+		//Said out loud, because a dropped touch is otherwise indistinguishable from one that never came
+		if (screenUsable != _lastScreenUsable)
+		{
+			_lastScreenUsable = screenUsable;
+
+			if (screenUsable)
+				Debug.Log("RemotePlay: screen usable again at " + Screen.width + "x" + Screen.height
+						  + ", touches are being mapped");
+			else
+				Debug.LogWarning("RemotePlay: screen is " + Screen.width + "x" + Screen.height
+								 + ", so touches are being dropped rather than mapped somewhere wrong");
+		}
+
 		while (s_Queue.TryDequeue(out Event e))
 		{
 			switch (e.kind)
 			{
-				case Kind.Key: keysChanged |= ApplyKey(e); break;
-				case Kind.Touch: ApplyTouch(e); break;
-				case Kind.Wheel: ApplyWheel(e); break;
+				case Kind.Key:
+					keysChanged |= ApplyKey(e);
+					break;
+
+				case Kind.Touch:
+					if (screenUsable)
+						ApplyTouch(e);
+					else
+						CancelTouch();
+					break;
+
+				case Kind.Wheel:
+					if (screenUsable)
+						ApplyWheel(e);
+					break;
 			}
 		}
 
@@ -153,6 +188,8 @@ public class RemotePlayInputRouter : MonoBehaviour
 			_touchStart = e.point;
 			_lastTouch = e.point;
 
+			ReportMapping(e.point);
+
 			//A menu press has to land the moment the finger does, so the UI sees the button go down at that
 			//spot. In play we hold off: only travel means the camera, and a finger that never travels is a
 			//tap, which we cannot know about until it lifts.
@@ -166,9 +203,9 @@ public class RemotePlayInputRouter : MonoBehaviour
 		if (!_touching)
 			return;
 
-		Vector2 scale = StreamToScreenScale();
-		Vector2 delta = new Vector2((e.point.x - _lastTouch.x) * scale.x,
-									-(e.point.y - _lastTouch.y) * scale.y);
+		float scale = StreamToScreen();
+		Vector2 delta = new Vector2((e.point.x - _lastTouch.x) * scale,
+									-(e.point.y - _lastTouch.y) * scale);
 		_lastTouch = e.point;
 
 		if (e.phase == Phase.Move)
@@ -239,6 +276,39 @@ public class RemotePlayInputRouter : MonoBehaviour
 		InputSystem.QueueStateEvent(_mouse, state);
 	}
 
+	/// Windows locking, alt-tabbing and the like swallow the release that would otherwise arrive, which
+	/// would leave a key held or the camera gate open for good. Everything is let go of on the way out.
+	private void OnApplicationFocus(bool hasFocus)
+	{
+		if (hasFocus)
+			return;
+
+		if (_heldKeys.Count > 0)
+		{
+			_heldKeys.Clear();
+			SendKeyboardState();
+		}
+
+		CancelTouch();
+	}
+
+	/// Drops the gesture and lets go of whatever it was holding, without reading it as a tap.
+	private void CancelTouch()
+	{
+		_touching = false;
+		_dragging = false;
+
+		//Focus can come and go around the device being added and taken away again
+		if (!_mouseButtonHeld || _mouse == null || !_mouse.added)
+			return;
+
+		//Left where it is rather than sent to the origin, so letting go cannot click something else
+		var state = new MouseState { position = _mouse.position.ReadValue() };
+		InputSystem.QueueStateEvent(_mouse, state.WithButton(_heldMouseButton, false));
+
+		_mouseButtonHeld = false;
+	}
+
 	private void QueueMouse(Vector2 streamPoint, Vector2 delta, MouseButton button, bool pressed)
 	{
 		_mouseButtonHeld = pressed;
@@ -253,17 +323,61 @@ public class RemotePlayInputRouter : MonoBehaviour
 		InputSystem.QueueStateEvent(_mouse, state.WithButton(button, pressed));
 	}
 
-	private static Vector2 StreamToScreenScale()
+	/// Says where a touch was aimed and where the pointer the UI reads actually is.
+	///
+	/// Two things can put those apart. The screen can stop matching what the stream is still sending, in
+	/// which case the reported point maps to the wrong place. Or the UI can be reading a different mouse
+	/// altogether: it folds every mouse into one pointer by default, so the machine's own mouse moving
+	/// decides where our button press is judged to have happened.
+	private void ReportMapping(Vector2 streamPoint)
 	{
-		return new Vector2(Screen.width / HiveRemotePlayEvents.StreamWidth,
-						   Screen.height / HiveRemotePlayEvents.StreamHeight);
+		int mice = 0;
+		Mouse other = null;
+
+		foreach (InputDevice device in InputSystem.devices)
+		{
+			if (!(device is Mouse mouse))
+				continue;
+
+			mice++;
+
+			if (mouse != _mouse)
+				other = mouse;
+		}
+
+		//Only the things that decide whether a touch lands where it was aimed. The point itself is left
+		//out: it changes with every touch, and reporting on that put the log past the point of being
+		//readable and hid the moment something actually went wrong.
+		string situation = "screen " + Screen.width + "x" + Screen.height
+						   + " | focused " + Application.isFocused
+						   + " | mice " + mice
+						   + " | current is " + (Mouse.current == _mouse ? "ours" : "the machine's");
+
+		if (situation == _lastSituation)
+			return;
+
+		_lastSituation = situation;
+
+		Debug.Log("RemotePlay: touch " + streamPoint.ToString("F1")
+				  + " aimed at " + ToScreenPosition(streamPoint).ToString("F1")
+				  + " | " + situation
+				  + " | ours reads " + _mouse.position.ReadValue().ToString("F1")
+				  + " | machine's reads " + (other != null ? other.position.ReadValue().ToString("F1") : "none"));
+	}
+
+	/// Stream pixels to game pixels. Only the ratio between the two matters, so this holds whatever the
+	/// window is resized to, where a measured stream size would not.
+	private static float StreamToScreen()
+	{
+		float scale = HiveRemotePlayEvents.StreamScale;
+		return scale > 0f ? 1f / scale : 1f;
 	}
 
 	//Stream coordinates run down the screen, the input system's run up it
 	private static Vector2 ToScreenPosition(Vector2 streamPoint)
 	{
-		Vector2 scale = StreamToScreenScale();
-		return new Vector2(streamPoint.x * scale.x, Screen.height - streamPoint.y * scale.y);
+		float scale = StreamToScreen();
+		return new Vector2(streamPoint.x * scale, Screen.height - streamPoint.y * scale);
 	}
 
 	/// True while the game is being played rather than sitting in a menu or a dialogue. Read off the
@@ -322,6 +436,11 @@ public class RemotePlayInputRouter : MonoBehaviour
 			case 0x37: key = Key.Digit7; return true;
 			case 0x38: key = Key.Digit8; return true;
 			case 0x39: key = Key.Digit9; return true;
+			//The windows keys and the menu key beside them. Pressing these on the virtual keyboard cannot
+			//reach the desktop, so they land in the game like any other key rather than locking anything.
+			case 0x5B: key = Key.LeftMeta; return true;
+			case 0x5C: key = Key.RightMeta; return true;
+			case 0x5D: key = Key.ContextMenu; return true;
 			//The OEM keys a phone keyboard can reach
 			case 0xC0: key = Key.Backquote; return true;
 			case 0xBA: key = Key.Semicolon; return true;
