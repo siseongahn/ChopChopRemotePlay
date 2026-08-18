@@ -76,7 +76,16 @@ public static class HiveRemotePlayEvents
 				break;
 
 			case "Event":
-				Debug.Log("RemotePlay: status " + JsonUtility.FromJson<SimplePayload>(json)?.eventValue?.value);
+				string status = JsonUtility.FromJson<SimplePayload>(json)?.eventValue?.value;
+				Debug.Log("RemotePlay: status " + status);
+
+				//Control events keep arriving after the viewer has gone, so the router is told when a
+				//session is up and ignores them the rest of the time
+				if (status == "REMOTE_PLAY_CONNECTED")
+					RemotePlayInputRouter.SetConnected(true);
+				else if (status == "REMOTE_PLAY_DISCONNECTED")
+					RemotePlayInputRouter.SetConnected(false);
+
 				break;
 
 			default:

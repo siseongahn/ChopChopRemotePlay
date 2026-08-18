@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
@@ -41,6 +42,14 @@ public class RemotePlayInputRouter : MonoBehaviour
 	private static readonly ConcurrentQueue<Event> s_Queue = new ConcurrentQueue<Event>();
 	private static RemotePlayInputRouter s_Instance;
 
+	//Written from RemotePlay's thread, read on ours
+	private static volatile bool s_Connected;
+	private static volatile bool s_ConnectionKnown;
+
+	//What we have already acted on, so a session coming or going is handled once
+	private bool _handledConnected;
+	private bool _machineMouseWasDisabled;
+
 	private Keyboard _keyboard;
 	private Mouse _mouse;
 
@@ -55,6 +64,12 @@ public class RemotePlayInputRouter : MonoBehaviour
 
 	private bool _mouseButtonHeld;
 	private MouseButton _heldMouseButton;
+
+	//The frame a press was put out on, and a release waiting for the frame after it
+	private int _pressFrame = -1;
+	private bool _releaseWaiting;
+	private MouseButton _waitingButton;
+	private Vector2 _waitingPoint;
 
 	//What the last touch was mapped under, so only changes get reported rather than every touch
 	private string _lastSituation;
@@ -72,18 +87,45 @@ public class RemotePlayInputRouter : MonoBehaviour
 		s_Instance = go.AddComponent<RemotePlayInputRouter>();
 	}
 
+	/// Told when a viewer joins or leaves. Called from RemotePlay's thread, so it only leaves a note for
+	/// Update to act on rather than touching the input system here.
+	public static void SetConnected(bool connected)
+	{
+		s_Connected = connected;
+		s_ConnectionKnown = true;
+	}
+
+	/// Takes an arriving control event as proof that somebody is at the other end, but only while nothing
+	/// has said otherwise.
+	///
+	/// A game started into a session that was already up never hears it begin - RemotePlay only reports the
+	/// change - so waiting for that report would leave us thinking nobody was there for the whole session.
+	/// Once a join or a leave has actually been reported, that is what counts: events keep arriving after a
+	/// viewer has gone, and reading those as somebody arriving is the very thing being guarded against.
+	private static void NoteSomebodyIsDriving()
+	{
+		if (s_ConnectionKnown)
+			return;
+
+		s_Connected = true;
+		s_ConnectionKnown = true;
+	}
+
 	public static void EnqueueKey(int virtualKey, Phase phase)
 	{
+		NoteSomebodyIsDriving();
 		s_Queue.Enqueue(new Event { kind = Kind.Key, virtualKey = virtualKey, phase = phase });
 	}
 
 	public static void EnqueueTouch(Vector2 streamPoint, Phase phase)
 	{
+		NoteSomebodyIsDriving();
 		s_Queue.Enqueue(new Event { kind = Kind.Touch, point = streamPoint, phase = phase });
 	}
 
 	public static void EnqueueWheel(Vector2 streamPoint, Phase phase)
 	{
+		NoteSomebodyIsDriving();
 		s_Queue.Enqueue(new Event { kind = Kind.Wheel, point = streamPoint, phase = phase });
 	}
 
@@ -96,6 +138,16 @@ public class RemotePlayInputRouter : MonoBehaviour
 
 	private void OnDestroy()
 	{
+		//Whatever happens, the machine gets its mouse back
+		if (_machineMouseWasDisabled)
+		{
+			Mouse machines = FindMachinesMouse();
+			if (machines != null)
+				InputSystem.EnableDevice(machines);
+
+			_machineMouseWasDisabled = false;
+		}
+
 		if (_keyboard != null)
 			InputSystem.RemoveDevice(_keyboard);
 
@@ -106,6 +158,16 @@ public class RemotePlayInputRouter : MonoBehaviour
 	private void Update()
 	{
 		bool keysChanged = false;
+
+		FollowConnection();
+
+		//A release held back from last frame goes first: it belongs to the gesture before whatever is in
+		//the queue now
+		if (_releaseWaiting)
+		{
+			_releaseWaiting = false;
+			QueueMouse(_waitingPoint, Vector2.zero, _waitingButton, false);
+		}
 
 		//Windows locking, or the game being switched away from, can leave the window with no size worth
 		//mapping against. A touch measured off that lands somewhere meaningless, so the pointer is let go
@@ -127,6 +189,12 @@ public class RemotePlayInputRouter : MonoBehaviour
 
 		while (s_Queue.TryDequeue(out Event e))
 		{
+			//RemotePlay goes on reporting after the viewer has left, and those late events would drive the
+			//game with nobody at the other end. Until a session has ever been reported we take what comes,
+			//so a game started into an existing session is not locked out.
+			if (s_ConnectionKnown && !s_Connected)
+				continue;
+
 			switch (e.kind)
 			{
 				case Kind.Key:
@@ -181,8 +249,11 @@ public class RemotePlayInputRouter : MonoBehaviour
 		if (e.phase == Phase.Down)
 		{
 			//Settled when the finger goes down and held for the rest of the gesture, so a menu opening
-			//midway cannot change what it means
-			_touchRole = IsGameplayLive() ? TouchRole.Camera : TouchRole.Pointer;
+			//midway cannot change what it means.
+			//A finger that landed on something in the UI is pointing at it, whatever else is going on: the
+			//bag and the prompts sit on the HUD during play, and treating a tap on them as the start of a
+			//camera drag meant the slightest wobble turned it into one and the tap never arrived.
+			_touchRole = IsGameplayLive() && !IsOverUI(e.point) ? TouchRole.Camera : TouchRole.Pointer;
 			_touching = true;
 			_dragging = false;
 			_touchStart = e.point;
@@ -190,14 +261,11 @@ public class RemotePlayInputRouter : MonoBehaviour
 
 			ReportMapping(e.point);
 
-			//A menu press has to land the moment the finger does, so the UI sees the button go down at that
-			//spot. In play we hold off: only travel means the camera, and a finger that never travels is a
-			//tap, which we cannot know about until it lifts.
+			//The pointer goes to the finger, but no button is pressed there: a tap on the UI is delivered by
+			//hand when it lifts (see ClickUI), and pressing as well got the click twice over whenever the UI
+			//did happen to follow our mouse. It also meant a tap on the bag swung the sword on the way past.
 			if (_touchRole == TouchRole.Pointer)
-			{
 				QueueArrival(e.point);
-				QueueMouse(e.point, Vector2.zero, ClickButton, true);
-			}
 
 			return;
 		}
@@ -216,7 +284,7 @@ public class RemotePlayInputRouter : MonoBehaviour
 			if (_touchRole == TouchRole.Pointer)
 			{
 				//The UI wants where the finger is, not how fast it got there
-				QueueMouse(e.point, Vector2.zero, ClickButton, true);
+				QueueArrival(e.point);
 				return;
 			}
 
@@ -236,13 +304,17 @@ public class RemotePlayInputRouter : MonoBehaviour
 
 		if (_touchRole == TouchRole.Pointer)
 		{
-			QueueMouse(e.point, Vector2.zero, ClickButton, false);
+			//The mouse alone did not get the UI to answer, so the click is handed to it directly. Nothing was
+			//pressed on the way in, so there is nothing to let go of here.
+			if (!_dragging)
+				ClickUI(e.point);
+
 			return;
 		}
 
 		if (_dragging)
 		{
-			QueueMouse(e.point, Vector2.zero, CameraDragButton, false);
+			QueueRelease(e.point, CameraDragButton);
 			return;
 		}
 
@@ -250,11 +322,10 @@ public class RemotePlayInputRouter : MonoBehaviour
 		if (e.phase == Phase.Cancel)
 			return;
 
-		//It never travelled, so it was a tap: in play that is a swing rather than a camera drag. Arrive,
-		//press and release land in the same batch, which is all a button action needs to report a press.
+		//It never travelled, so it was a tap: in play that is a swing rather than a camera drag
 		QueueArrival(e.point);
 		QueueMouse(e.point, Vector2.zero, ClickButton, true);
-		QueueMouse(e.point, Vector2.zero, ClickButton, false);
+		QueueRelease(e.point, ClickButton);
 	}
 
 	/// A wheel event carries where the pointer sat and which way it turned; one event is one notch.
@@ -313,6 +384,8 @@ public class RemotePlayInputRouter : MonoBehaviour
 		_mouseButtonHeld = false;
 	}
 
+	private readonly List<RaycastResult> _hits = new List<RaycastResult>();
+
 	/// Puts the pointer where the finger is before anything is pressed there.
 	///
 	/// The input system resets devices when the game loses focus, which puts our mouse back at the origin.
@@ -325,8 +398,29 @@ public class RemotePlayInputRouter : MonoBehaviour
 		InputSystem.QueueStateEvent(_mouse, state);
 	}
 
+	/// Lets go of the button, but never in the same frame it went down in.
+	///
+	/// The UI looks at the pointer once a frame. A press and its release in the one frame are both gone by
+	/// then - the button reads as up and nothing was ever seen to be clicked. A quick tap did exactly that,
+	/// which is why some taps took and others did not, seemingly at random.
+	private void QueueRelease(Vector2 streamPoint, MouseButton button)
+	{
+		if (_pressFrame == Time.frameCount)
+		{
+			_releaseWaiting = true;
+			_waitingButton = button;
+			_waitingPoint = streamPoint;
+			return;
+		}
+
+		QueueMouse(streamPoint, Vector2.zero, button, false);
+	}
+
 	private void QueueMouse(Vector2 streamPoint, Vector2 delta, MouseButton button, bool pressed)
 	{
+		if (pressed)
+			_pressFrame = Time.frameCount;
+
 		_mouseButtonHeld = pressed;
 		_heldMouseButton = button;
 
@@ -394,6 +488,109 @@ public class RemotePlayInputRouter : MonoBehaviour
 	{
 		float scale = StreamToScreen();
 		return new Vector2(streamPoint.x * scale, Screen.height - streamPoint.y * scale);
+	}
+
+	/// Hands the mouse over to the viewer for the length of a session, and gives it back afterwards.
+	///
+	/// While somebody is playing remotely the machine's own mouse is switched off. The two would otherwise
+	/// both be driving the same game from different places - and the UI follows whichever moved last, so a
+	/// nudge of the desk mouse was enough to send the viewer's taps somewhere else.
+	private void FollowConnection()
+	{
+		if (!s_ConnectionKnown || s_Connected == _handledConnected)
+			return;
+
+		_handledConnected = s_Connected;
+
+		Mouse machines = FindMachinesMouse();
+		if (machines == null)
+			return;
+
+		if (s_Connected)
+		{
+			if (machines.enabled)
+			{
+				InputSystem.DisableDevice(machines);
+				_machineMouseWasDisabled = true;
+				Debug.Log("RemotePlay: a viewer joined, so the machine's mouse is standing down");
+			}
+		}
+		else if (_machineMouseWasDisabled)
+		{
+			InputSystem.EnableDevice(machines);
+			_machineMouseWasDisabled = false;
+			Debug.Log("RemotePlay: the viewer left, so the machine's mouse has it back");
+
+			//Nothing of the viewer's should be left holding anything down
+			CancelTouch();
+		}
+	}
+
+	private Mouse FindMachinesMouse()
+	{
+		foreach (InputDevice device in InputSystem.devices)
+		{
+			if (device is Mouse mouse && mouse != _mouse)
+				return mouse;
+		}
+
+		return null;
+	}
+
+	/// Clicks the UI at a point directly, rather than leaving it to the UI to follow our mouse.
+	///
+	/// The mouse we add carries everything else perfectly well - the camera turns, attacks come out - but
+	/// the UI would not answer its button, whatever the pointer settings. Where the press lands is not in
+	/// doubt: a raycast at the same point finds the button the finger was on. So the click is delivered to
+	/// what is there, the way the UI would have delivered it, and the mouse is left to the rest.
+	///
+	/// This covers a tap. Hovering and dragging the UI are not part of it, and are not what a finger on a
+	/// phone is doing.
+	private void ClickUI(Vector2 streamPoint)
+	{
+		EventSystem events = EventSystem.current;
+		if (events == null)
+			return;
+
+		var data = new PointerEventData(events)
+		{
+			position = ToScreenPosition(streamPoint),
+			button = PointerEventData.InputButton.Left,
+			clickCount = 1
+		};
+
+		_hits.Clear();
+		events.RaycastAll(data, _hits);
+
+		if (_hits.Count == 0)
+			return;
+
+		data.pointerCurrentRaycast = _hits[0];
+		data.pointerPressRaycast = _hits[0];
+
+		GameObject target = _hits[0].gameObject;
+
+		//Down and up go to whatever handles them, and the click itself to the first thing up the line that
+		//wants one - which is what leaves a button to answer for its own children
+		data.pointerPress = ExecuteEvents.ExecuteHierarchy(target, data, ExecuteEvents.pointerDownHandler);
+
+		ExecuteEvents.Execute(target, data, ExecuteEvents.pointerUpHandler);
+		ExecuteEvents.ExecuteHierarchy(target, data, ExecuteEvents.pointerClickHandler);
+	}
+
+	/// Whether anything in the UI is under the given point.
+	private bool IsOverUI(Vector2 streamPoint)
+	{
+		EventSystem events = EventSystem.current;
+		if (events == null)
+			return false;
+
+		var data = new PointerEventData(events) { position = ToScreenPosition(streamPoint) };
+
+		_hits.Clear();
+		events.RaycastAll(data, _hits);
+
+		return _hits.Count > 0;
 	}
 
 	/// True while the game is being played rather than sitting in a menu or a dialogue. Read off the
