@@ -194,7 +194,10 @@ public class RemotePlayInputRouter : MonoBehaviour
 			//spot. In play we hold off: only travel means the camera, and a finger that never travels is a
 			//tap, which we cannot know about until it lifts.
 			if (_touchRole == TouchRole.Pointer)
+			{
+				QueueArrival(e.point);
 				QueueMouse(e.point, Vector2.zero, ClickButton, true);
+			}
 
 			return;
 		}
@@ -247,8 +250,9 @@ public class RemotePlayInputRouter : MonoBehaviour
 		if (e.phase == Phase.Cancel)
 			return;
 
-		//It never travelled, so it was a tap: in play that is a swing rather than a camera drag. Press and
-		//release land in the same batch, which is all a button action needs to report a press.
+		//It never travelled, so it was a tap: in play that is a swing rather than a camera drag. Arrive,
+		//press and release land in the same batch, which is all a button action needs to report a press.
+		QueueArrival(e.point);
 		QueueMouse(e.point, Vector2.zero, ClickButton, true);
 		QueueMouse(e.point, Vector2.zero, ClickButton, false);
 	}
@@ -307,6 +311,18 @@ public class RemotePlayInputRouter : MonoBehaviour
 		InputSystem.QueueStateEvent(_mouse, state.WithButton(_heldMouseButton, false));
 
 		_mouseButtonHeld = false;
+	}
+
+	/// Puts the pointer where the finger is before anything is pressed there.
+	///
+	/// The input system resets devices when the game loses focus, which puts our mouse back at the origin.
+	/// Pressing in the same breath as arriving left the press to be judged wherever the pointer had been
+	/// left, so the first tap after focus came and went landed in the bottom corner instead of under the
+	/// finger. A real mouse arrives before it clicks; so does this one now.
+	private void QueueArrival(Vector2 streamPoint)
+	{
+		var state = new MouseState { position = ToScreenPosition(streamPoint) };
+		InputSystem.QueueStateEvent(_mouse, state);
 	}
 
 	private void QueueMouse(Vector2 streamPoint, Vector2 delta, MouseButton button, bool pressed)
@@ -419,6 +435,7 @@ public class RemotePlayInputRouter : MonoBehaviour
 			case 0xA3: key = Key.RightCtrl; return true;
 			case 0x12: case 0xA4: key = Key.LeftAlt; return true;
 			case 0xA5: key = Key.RightAlt; return true;
+			case 0x14: key = Key.CapsLock; return true;
 			case 0x1B: key = Key.Escape; return true;
 			case 0x20: key = Key.Space; return true;
 			case 0x25: key = Key.LeftArrow; return true;
