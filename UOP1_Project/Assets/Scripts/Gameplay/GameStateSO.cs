@@ -24,11 +24,16 @@ public class GameStateSO : DescriptionBaseSO
 	[Header("Broadcasting on")]
 	[SerializeField] private BoolEventChannelSO _onCombatStateEvent = default;
 	
-	private List<Transform> _alertEnemies;
+	//Built here rather than in Start, which Unity never calls on a ScriptableObject: the list stayed null
+	//and every call below threw on its first line, which took Combat with it - the only way into that state
+	//sits after the throw in AddAlertEnemy.
+	//Emptied on load as well, because a ScriptableObject keeps its runtime state between play sessions in
+	//the editor, and enemies left over from the last run would go on counting as alert.
+	private List<Transform> _alertEnemies = new List<Transform>();
 
-	private void Start()
+	private void OnEnable()
 	{
-		_alertEnemies = new List<Transform>();
+		_alertEnemies.Clear();
 	}
 
 	public void AddAlertEnemy(Transform enemy)
