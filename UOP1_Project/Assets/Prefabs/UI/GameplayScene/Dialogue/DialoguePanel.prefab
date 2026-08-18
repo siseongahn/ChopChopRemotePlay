@@ -175,6 +175,7 @@ GameObject:
   - component: {fileID: 3687453176568796422}
   - component: {fileID: 3687453176568796423}
   - component: {fileID: 3687453176568796416}
+  - component: {fileID: 3687453176568796424}
   m_Layer: 5
   m_Name: DialoguePanel
   m_TagString: Untagged
@@ -182,6 +183,19 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &3687453176568796424
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3687453176568796421}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e8c2a91d73b4c5fae06b21d8c7f3095, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  _inputReader: {fileID: 11400000, guid: 945ec0365077176418488737deed54be, type: 2}
 --- !u!224 &3687453176568796422
 RectTransform:
   m_ObjectHideFlags: 0

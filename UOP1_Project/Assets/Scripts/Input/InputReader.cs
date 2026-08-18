@@ -126,6 +126,15 @@ public class InputReader : DescriptionBaseSO, GameInput.IGameplayActions, GameIn
 			InteractEvent.Invoke();
 	}
 
+	// Lets the prompt on the HUD ask for the same thing the key asks for, gate and all, so a tap cannot
+	// interact at a moment the key could not. What it turns into - talking, cooking, picking something up -
+	// is settled by whatever is in reach, the same as with the key.
+	public void RequestInteract()
+	{
+		if (_gameStateManager.CurrentGameState == GameState.Gameplay)
+			InteractEvent.Invoke();
+	}
+
 	public void OnJump(InputAction.CallbackContext context)
 	{
 		if (context.phase == InputActionPhase.Performed)
@@ -189,6 +198,13 @@ public class InputReader : DescriptionBaseSO, GameInput.IGameplayActions, GameIn
 
 		if (context.phase == InputActionPhase.Performed)
 			AdvanceDialogueEvent.Invoke();
+	}
+
+	// Lets a click on the dialogue box move it on the same way the key does. No gate of its own: the box
+	// is only on screen while somebody is talking, which is the same window the key has.
+	public void RequestAdvanceDialogue()
+	{
+		AdvanceDialogueEvent.Invoke();
 	}
 
 	public void OnConfirm(InputAction.CallbackContext context)

@@ -86,6 +86,7 @@ GameObject:
   - component: {fileID: 4915692451633599295}
   - component: {fileID: 4915692451633599293}
   - component: {fileID: 4915692451633599294}
+  - component: {fileID: 4915692451633599296}
   m_Layer: 5
   m_Name: Icon
   m_TagString: Untagged
@@ -93,6 +94,19 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &4915692451633599296
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4915692451633599280}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a4d7e13c85b4f2ab7e0d61f34c92a58, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  _inputReader: {fileID: 11400000, guid: 945ec0365077176418488737deed54be, type: 2}
 --- !u!224 &4915692451633599295
 RectTransform:
   m_ObjectHideFlags: 0
