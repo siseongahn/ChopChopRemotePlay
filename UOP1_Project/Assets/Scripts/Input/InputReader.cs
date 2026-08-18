@@ -88,6 +88,13 @@ public class InputReader : DescriptionBaseSO, GameInput.IGameplayActions, GameIn
 		if (context.phase == InputActionPhase.Performed)
 			OpenInventoryEvent.Invoke();
 	}
+
+	// Lets the bag on the HUD ask for the inventory the same way the key does, so both go through the one
+	// event and everything listening to it behaves identically
+	public void RequestOpenInventory()
+	{
+		OpenInventoryEvent.Invoke();
+	}
 	public void OnCancel(InputAction.CallbackContext context)
 	{
 		if (context.phase == InputActionPhase.Performed)
