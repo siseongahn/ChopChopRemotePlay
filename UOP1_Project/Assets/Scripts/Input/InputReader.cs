@@ -173,7 +173,10 @@ public class InputReader : DescriptionBaseSO, GameInput.IGameplayActions, GameIn
 			DisableMouseControlCameraEvent.Invoke();
 	}
 
-	private bool IsDeviceMouse(InputAction.CallbackContext context) => context.control.device.name == "Mouse";
+	// Asked of the device's type rather than its name, so a second mouse counts too. The remote-play
+	// router adds one of its own to carry the viewer's touches, and a name check missed it: the camera
+	// then read those as stick movement and paced them by frame time instead of by how far they moved.
+	private bool IsDeviceMouse(InputAction.CallbackContext context) => context.control.device is Mouse;
 
 	public void OnMoveSelection(InputAction.CallbackContext context)
 	{

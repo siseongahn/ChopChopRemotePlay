@@ -11,7 +11,12 @@ public class CameraManager : MonoBehaviour
 	public CinemachineImpulseSource impulseSource;
 	private bool _isRMBPressed;
 
-	[SerializeField][Range(.5f, 3f)] private float _speedMultiplier = 1f; //TODO: make this modifiable in the game settings											
+	[SerializeField][Range(.5f, 3f)] private float _speedMultiplier = 1f; //TODO: make this modifiable in the game settings
+
+	[Tooltip("Damps down how far a mouse drag turns the camera. Only the mouse: a stick and the keys are " +
+			 "already paced by how long they are held, where a drag is not.")]
+	[SerializeField][Range(.1f, 1f)] private float _mouseSensitivity = .3f;
+
 	[SerializeField] private TransformAnchor _cameraTransformAnchor = default;
 	[SerializeField] private TransformAnchor _protagonistTransformAnchor = default;
 
@@ -92,7 +97,7 @@ public class CameraManager : MonoBehaviour
 
 		//Using a "fixed delta time" if the device is mouse,
 		//since for the mouse we don't have to account for frame duration
-		float deviceMultiplier = isDeviceMouse ? 0.02f : Time.deltaTime;
+		float deviceMultiplier = isDeviceMouse ? 0.02f * _mouseSensitivity : Time.deltaTime;
 
 		freeLookVCam.m_XAxis.m_InputAxisValue = cameraMovement.x * deviceMultiplier * _speedMultiplier;
 		freeLookVCam.m_YAxis.m_InputAxisValue = cameraMovement.y * deviceMultiplier * _speedMultiplier;
