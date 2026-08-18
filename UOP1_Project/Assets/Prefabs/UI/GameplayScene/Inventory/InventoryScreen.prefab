@@ -327,6 +327,7 @@ GameObject:
   m_Component:
   - component: {fileID: 3398809472448788472}
   - component: {fileID: 6750303518595963891}
+  - component: {fileID: 1458371249797437863}
   m_Layer: 5
   m_Name: Panel Items List
   m_TagString: Untagged
@@ -334,6 +335,23 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &1458371249797437863
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1458371249797437862}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3b9e5c7a1d2f44e8b6a0c9d3e7f10245, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  _url: https://www.youtube.com
+  _icon: {fileID: 21300000, guid: 6d2f83a4c71b40c9a5e7218b93de4f07, type: 3}
+  _label: "?"
+  _closeButtonName: Close Button
+  _gap: 8
 --- !u!224 &3398809472448788472
 RectTransform:
   m_ObjectHideFlags: 0
