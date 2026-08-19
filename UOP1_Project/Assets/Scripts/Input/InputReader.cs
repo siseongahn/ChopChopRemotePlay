@@ -139,9 +139,14 @@ public class InputReader : DescriptionBaseSO, GameInput.IGameplayActions, GameIn
 
 	/// Swings without a key, for the button on the HUD. A viewer on a phone has no keyboard to reach the
 	/// attack with now that the left button walks the character instead.
+	///
+	/// Combat counts as much as ordinary play here, and rather more: an enemy being awake is what puts the
+	/// game in that state, and refusing to swing then is refusing at the one moment it is wanted. The key
+	/// has always worked there, since the gameplay map stays enabled through combat.
 	public void RequestAttack()
 	{
-		if (_gameStateManager.CurrentGameState == GameState.Gameplay)
+		if (_gameStateManager.CurrentGameState == GameState.Gameplay
+			|| _gameStateManager.CurrentGameState == GameState.Combat)
 			AttackEvent.Invoke();
 	}
 
