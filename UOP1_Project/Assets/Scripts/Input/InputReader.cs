@@ -22,6 +22,8 @@ public class InputReader : DescriptionBaseSO, GameInput.IGameplayActions, GameIn
 	public event UnityAction ResetActionButtonEvent = delegate { };
 	public event UnityAction<Vector2> MoveEvent = delegate { };
 	public event UnityAction<Vector2, bool> CameraMoveEvent = delegate { };
+	public event UnityAction<float> CameraZoomEvent = delegate { };
+	public event UnityAction<Vector2> PointerClickEvent = delegate { };
 	public event UnityAction EnableMouseControlCameraEvent = delegate { };
 	public event UnityAction DisableMouseControlCameraEvent = delegate { };
 	public event UnityAction StartedRunning = delegate { };
@@ -135,6 +137,14 @@ public class InputReader : DescriptionBaseSO, GameInput.IGameplayActions, GameIn
 			InteractEvent.Invoke();
 	}
 
+	/// Swings without a key, for the button on the HUD. A viewer on a phone has no keyboard to reach the
+	/// attack with now that the left button walks the character instead.
+	public void RequestAttack()
+	{
+		if (_gameStateManager.CurrentGameState == GameState.Gameplay)
+			AttackEvent.Invoke();
+	}
+
 	public void OnJump(InputAction.CallbackContext context)
 	{
 		if (context.phase == InputActionPhase.Performed)
@@ -180,6 +190,36 @@ public class InputReader : DescriptionBaseSO, GameInput.IGameplayActions, GameIn
 
 		if (context.phase == InputActionPhase.Canceled)
 			DisableMouseControlCameraEvent.Invoke();
+	}
+
+	/// <summary>
+	/// A click or tap somewhere in the world, carrying where on the screen it landed.
+	/// </summary>
+	/// <remarks>
+	/// The position is read off the device that did the clicking rather than from Mouse.current, because
+	/// there is more than one mouse while a remote viewer is connected and the one holding "current" is not
+	/// always the one whose button went down.
+	/// </remarks>
+	public void OnPointerClick(InputAction.CallbackContext context)
+	{
+		if (context.phase != InputActionPhase.Performed)
+			return;
+
+		//Pointer rather than Mouse, so a touchscreen or a pen would be read the same way
+		if (context.control.device is Pointer pointer)
+			PointerClickEvent.Invoke(pointer.position.ReadValue());
+	}
+
+	public void OnZoomCamera(InputAction.CallbackContext context)
+	{
+		//The wheel reports how far it turned rather than where it rests, so a notch arrives as one value and
+		//is gone by the next frame. Canceled carries the zero that follows and would only undo the notch.
+		if (context.phase == InputActionPhase.Canceled)
+			return;
+
+		float scroll = context.ReadValue<float>();
+		if (scroll != 0f)
+			CameraZoomEvent.Invoke(scroll);
 	}
 
 	// Asked of the device's type rather than its name, so a second mouse counts too. The remote-play

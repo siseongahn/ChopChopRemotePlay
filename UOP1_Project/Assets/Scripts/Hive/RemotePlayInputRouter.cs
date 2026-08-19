@@ -322,7 +322,8 @@ public class RemotePlayInputRouter : MonoBehaviour
 		if (e.phase == Phase.Cancel)
 			return;
 
-		//It never travelled, so it was a tap: in play that is a swing rather than a camera drag
+		//It never travelled, so it was a tap rather than the start of a camera drag. In play that button walks
+		//the character to wherever the finger landed; swinging is on a key of its own.
 		QueueArrival(e.point);
 		QueueMouse(e.point, Vector2.zero, ClickButton, true);
 		QueueRelease(e.point, ClickButton);

@@ -85,6 +85,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6822594373627009028}
   - component: {fileID: 6822594373627009029}
+  - component: {fileID: 6822594373627009030}
   m_Layer: 5
   m_Name: GameScreen
   m_TagString: Untagged
@@ -120,6 +121,21 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6822594373627009031}
   m_CullTransparentMesh: 0
+--- !u!114 &6822594373627009030
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6822594373627009031}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3b8f5c47a29e4d16bc7f0e93d5148a2b, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  _inputReader: {fileID: 11400000, guid: 945ec0365077176418488737deed54be, type: 2}
+  _disc: {fileID: 21300000, guid: 552c608eb20bd4c5781d8232dfa30669, type: 3}
+  _icon: {fileID: 21300000, guid: d2e0d1d8de3cd4c2e93f2dd685f94847, type: 3}
 --- !u!1001 &637319115534657051
 PrefabInstance:
   m_ObjectHideFlags: 0

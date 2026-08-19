@@ -76,6 +76,22 @@
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": ""
+                },
+                {
+                    "name": "ZoomCamera",
+                    "type": "Value",
+                    "id": "7f3a1e42-5c0b-4d18-9a6e-2b8d4f1c7a93",
+                    "expectedControlType": "Axis",
+                    "processors": "",
+                    "interactions": ""
+                },
+                {
+                    "name": "PointerClick",
+                    "type": "Button",
+                    "id": "6d2c8a15-9e47-4b30-a1f8-5c9b3e7d2048",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": ""
                 }
             ],
             "bindings": [
@@ -295,7 +311,7 @@
                     "interactions": "",
                     "processors": "",
                     "groups": "KeyboardOrGamepad",
-                    "action": "Attack",
+                    "action": "PointerClick",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },
@@ -450,6 +466,17 @@
                     "processors": "",
                     "groups": "KeyboardOrGamepad",
                     "action": "MouseControlCamera",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "b41d9c72-6e35-4a80-8f1c-3d7e5a2b9046",
+                    "path": "<Mouse>/scroll/y",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "KeyboardOrGamepad",
+                    "action": "ZoomCamera",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },
