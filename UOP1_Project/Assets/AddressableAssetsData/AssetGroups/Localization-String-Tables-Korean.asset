@@ -1,0 +1,70 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: Localization-String-Tables-Korean
+  m_EditorClassIdentifier: 
+  m_GroupName: Localization-String-Tables-Korean
+  m_Data:
+    m_SerializedData: []
+  m_GUID: 2af3b01a00bfdc74b82ee3f9b1c784e7
+  m_SerializeEntries:
+  - m_GUID: a233413bcf60827459d5d5c327326b66
+    m_Address: UI Misc_ko
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko
+  - m_GUID: 51648ef274b52fd479f554f1f78aecfa
+    m_Address: Actors_ko
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko
+  - m_GUID: 5c8eed16f0ee0ec418c44ae0abcecf48
+    m_Address: Interactions_ko
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko
+  - m_GUID: ec3d8a5afa1848c448e0dfe75f0e615a
+    m_Address: Inventory Item Description_ko
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko
+  - m_GUID: 1dd0b873ba50d9e4bbbc45c538bbe127
+    m_Address: Questline Dialogue_ko
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko
+  - m_GUID: 2f319783dab98694dbd8d92a19a07dec
+    m_Address: Inventory Item Name_ko
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko
+  - m_GUID: 352f9866adb5a8b4a90ef912804b8d56
+    m_Address: Critters_ko
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko
+  - m_GUID: 9d2c043202123044798f3f91d43a4172
+    m_Address: Scene Names_ko
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko
+  - m_GUID: 3c0534d38a57af8478f90c07c1749581
+    m_Address: Buttons_ko
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-ko
+  m_ReadOnly: 1
+  m_Settings: {fileID: 11400000, guid: bffab80dc16c4464b92b2e97b6a1964c, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: 1128dfdf9be3b6b42908f20f143fba64, type: 2}
+    - {fileID: 11400000, guid: 4edb302e8be57f6459c14f4358f88ffb, type: 2}

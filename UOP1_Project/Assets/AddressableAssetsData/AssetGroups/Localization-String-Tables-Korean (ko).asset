@@ -16,17 +16,7 @@ MonoBehaviour:
   m_Data:
     m_SerializedData: []
   m_GUID: 22f2b2e1726538b4394425af38a9a047
-  m_SerializeEntries:
-  - m_GUID: 1dd0b873ba50d9e4bbbc45c538bbe127
-    m_Address: Questline Dialogue_ko
-    m_ReadOnly: 1
-    m_SerializedLabels:
-    - Locale-ko
-  - m_GUID: 51648ef274b52fd479f554f1f78aecfa
-    m_Address: Actors_ko
-    m_ReadOnly: 1
-    m_SerializedLabels:
-    - Locale-ko
+  m_SerializeEntries: []
   m_ReadOnly: 1
   m_Settings: {fileID: 11400000, guid: bffab80dc16c4464b92b2e97b6a1964c, type: 2}
   m_SchemaSet:

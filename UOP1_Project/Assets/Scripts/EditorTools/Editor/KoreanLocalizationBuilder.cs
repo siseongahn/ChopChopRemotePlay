@@ -37,6 +37,13 @@ public static class KoreanLocalizationBuilder
 	{
 		("Questline Dialogue", "dialogue_ko.json"),
 		("Actors", "actors_ko.json"),
+		("UI Misc", "ui_misc_ko.json"),
+		("Inventory Item Name", "item_name_ko.json"),
+		("Inventory Item Description", "item_description_ko.json"),
+		("Interactions", "interactions_ko.json"),
+		("Critters", "critters_ko.json"),
+		("Scene Names", "scene_names_ko.json"),
+		("Buttons", "buttons_ko.json"),
 	};
 
 	[MenuItem("Tools/Add Korean Localization")]

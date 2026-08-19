@@ -61,8 +61,11 @@ public class UISettingsLanguageComponent : MonoBehaviour
 			if (LocalizationSettings.SelectedLocale == locale)
 				_currentSelectedOption = i;
 
-			var displayName = locales[i].Identifier.CultureInfo != null ? locales[i].Identifier.CultureInfo.NativeName : locales[i].ToString();
-			_languagesList.Add(displayName);
+			//The locale's own name, not the culture's. Asking the culture what it calls itself put the wrong
+			//name against Korean in the built player - the list read "italiano" twice - and a language nobody
+			//can find by its name is worse than one spelled differently to how a native would spell it.
+			//LocaleName already falls back to the culture and then to the asset name where it is left blank.
+			_languagesList.Add(locales[i].LocaleName);
 		}
 		_languageField.FillSettingField(_languagesList.Count, _currentSelectedOption, _languagesList[_currentSelectedOption]);
 		_savedSelectedOption = _currentSelectedOption;
@@ -90,6 +93,12 @@ public class UISettingsLanguageComponent : MonoBehaviour
 
 		var locale = LocalizationSettings.AvailableLocales.Locales[_currentSelectedOption];
 		LocalizationSettings.SelectedLocale = locale;
+
+		// The callback we just muted is what redraws the field, so the name has to be put up here instead.
+		// Without this the field kept whatever was showing before and read one language behind - stepping onto
+		// Korean still said Français - and only came right on leaving the tab and coming back, which is the
+		// one path that fills the field again.
+		_languageField.FillSettingField(_languagesList.Count, _currentSelectedOption, _languagesList[_currentSelectedOption]);
 
 		// Resubscribe to SelectedLocaleChanged so that we can stay in sync with changes that may be made by other scripts.
 		LocalizationSettings.SelectedLocaleChanged += LocalizationSettings_SelectedLocaleChanged;
