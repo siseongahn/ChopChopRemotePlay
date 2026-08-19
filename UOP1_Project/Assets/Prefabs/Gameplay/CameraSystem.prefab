@@ -917,6 +917,8 @@ MonoBehaviour:
   _protagonistTransformAnchor: {fileID: 11400000, guid: 35fc4039342b6ba458d0d4429e89ee74,
     type: 2}
   _camShakeEvent: {fileID: 11400000, guid: 3d8e5223e1e74274cbb375151106b21e, type: 2}
+  _combatStateEvent: {fileID: 11400000, guid: 3c3f87199559eb0418616aedad568b71, type: 2}
+  _combatZoom: 1.6
 --- !u!1 &8745341641394998848
 GameObject:
   m_ObjectHideFlags: 0

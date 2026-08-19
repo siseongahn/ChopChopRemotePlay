@@ -37,13 +37,30 @@ public class CameraManager : MonoBehaviour
 	[Tooltip("The CameraManager listens to this event, fired by protagonist GettingHit state, to shake camera")]
 	[SerializeField] private VoidEventChannelSO _camShakeEvent = default;
 
+	[Tooltip("Raised with true while an enemy is awake and after it, so the camera can stand back for a fight")]
+	[SerializeField] private BoolEventChannelSO _combatStateEvent = default;
+
+	[Tooltip("How far back a fight pulls the camera, as a share of the distance the rig was authored at. " +
+			 "Read as a floor rather than a setting: a player who has already zoomed further out is left alone.")]
+	[SerializeField][Range(1f, 3f)] private float _combatZoom = 1.6f;
+
 	private bool _cameraMovementLock = false;
 
 	//The rig as it was authored. Zoom is a share of this rather than a nudge to whatever the orbits currently
 	//hold, so repeated notches cannot drift and 1 always means exactly where the rig started.
 	private CinemachineFreeLook.Orbit[] _authoredOrbits;
 	private float _zoom = 1f;
+
+	//What the wheel asked for, kept apart from where the camera actually ends up: a fight can stand the
+	//camera further back without overwriting what the player chose, and they get it back when the fight ends.
 	private float _zoomWanted = 1f;
+	private bool _inCombat;
+
+	/// Where the camera should be sitting, once a fight has had its say.
+	///
+	/// The larger of the two rather than the combat distance outright, so a player who likes the camera well
+	/// back is not pulled in by a fight starting.
+	private float ZoomTarget => _inCombat ? Mathf.Max(_zoomWanted, _combatZoom) : _zoomWanted;
 
 	private void OnEnable()
 	{
@@ -63,6 +80,9 @@ public class CameraManager : MonoBehaviour
 		_protagonistTransformAnchor.OnAnchorProvided += SetupProtagonistVirtualCamera;
 		_camShakeEvent.OnEventRaised += impulseSource.GenerateImpulse;
 
+		if (_combatStateEvent != null)
+			_combatStateEvent.OnEventRaised += OnCombatStateChanged;
+
 		_cameraTransformAnchor.Provide(mainCamera.transform);
 	}
 
@@ -75,6 +95,9 @@ public class CameraManager : MonoBehaviour
 
 		_protagonistTransformAnchor.OnAnchorProvided -= SetupProtagonistVirtualCamera;
 		_camShakeEvent.OnEventRaised -= impulseSource.GenerateImpulse;
+
+		if (_combatStateEvent != null)
+			_combatStateEvent.OnEventRaised -= OnCombatStateChanged;
 
 		_cameraTransformAnchor.Unset();
 	}
@@ -146,18 +169,37 @@ public class CameraManager : MonoBehaviour
 		_zoomWanted = Mathf.Clamp(_zoomWanted - scroll * _zoomSpeed, _minZoom, _maxZoom);
 	}
 
+	/// <summary>
+	/// Stands the camera back while there is a fight on, and lets it come in again afterwards.
+	/// </summary>
+	/// <remarks>
+	/// A fight at the authored distance is fought half off screen - the enemy circles out of frame and the
+	/// swing lands on something the player cannot see. Standing back a little puts both of them in view.
+	///
+	/// The channel is raised by GameStateSO on the way into and out of combat, which is a state nothing was
+	/// listening for until now.
+	/// </remarks>
+	private void OnCombatStateChanged(bool inCombat)
+	{
+		_inCombat = inCombat;
+	}
+
 	private void Update()
 	{
-		if (_authoredOrbits == null || _zoom == _zoomWanted)
+		//Compared against where a fight says we should be, not against the wheel alone, or combat would set a
+		//target the camera never travelled to
+		if (_authoredOrbits == null || _zoom == ZoomTarget)
 			return;
+
+		float target = ZoomTarget;
 
 		//Paced by an exponential rather than a flat share of the gap, so the glide takes the same time
 		//whatever the frame rate
-		_zoom = Mathf.Lerp(_zoom, _zoomWanted, 1f - Mathf.Exp(-_zoomSmoothing * Time.deltaTime));
+		_zoom = Mathf.Lerp(_zoom, target, 1f - Mathf.Exp(-_zoomSmoothing * Time.deltaTime));
 
 		//Snapped once it is close enough to be indistinguishable, so this stops rewriting the rig every frame
-		if (Mathf.Abs(_zoomWanted - _zoom) < .0005f)
-			_zoom = _zoomWanted;
+		if (Mathf.Abs(target - _zoom) < .0005f)
+			_zoom = target;
 
 		int rigs = Mathf.Min(_authoredOrbits.Length, freeLookVCam.m_Orbits.Length);
 		for (int i = 0; i < rigs; i++)
