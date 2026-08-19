@@ -61,17 +61,61 @@ public class InteractionManager : MonoBehaviour
 		RequestUpdateUI(false);
 	}
 
+	/// <summary>
+	/// Puts the nearest thing in range at the front of the list, which is the end everything else reads.
+	/// </summary>
+	/// <remarks>
+	/// The list is ordered by when things came into range. That was fair enough while the detector was a
+	/// narrow slab held out in front, where the latest arrival was whatever the player had just walked up to.
+	/// Now that it reaches to the sides and a little behind, several things are usually in range at once and
+	/// the latest arrival is as likely to be the one over the player's shoulder as the one under their nose.
+	/// </remarks>
+	private void PromoteNearest()
+	{
+		if (_potentialInteractions.Count < 2)
+			return;
+
+		LinkedListNode<Interaction> nearest = null;
+		float nearestDistance = float.MaxValue;
+
+		for (LinkedListNode<Interaction> node = _potentialInteractions.First; node != null; node = node.Next)
+		{
+			GameObject candidate = node.Value.interactableObject;
+			if (candidate == null)
+				continue;
+
+			//Squared, because only the ordering matters here
+			float distance = (candidate.transform.position - transform.position).sqrMagnitude;
+			if (distance < nearestDistance)
+			{
+				nearestDistance = distance;
+				nearest = node;
+			}
+		}
+
+		if (nearest == null || nearest == _potentialInteractions.First)
+			return;
+
+		//Read before the node leaves the list, rather than trusting a removed node to still hold its value
+		Interaction winner = nearest.Value;
+		_potentialInteractions.Remove(nearest);
+		_potentialInteractions.AddFirst(winner);
+	}
+
 	private void OnInteractionButtonPress()
 	{
 		if (_potentialInteractions.Count == 0)
 			return;
 
-		//Interacting wins over swinging. The prompt on the HUD is clicked with the same button that
-		//attacks, and the StateMachine looks at attacking before it looks at picking something up, so the
-		//swing would take the turn and the item would stay on the ground. Talking and cooking escape that
-		//by moving the input off the gameplay map below, picking up has nothing to move.
-		//The attack cannot be headed off - it is already cached by the time a click is delivered - so it
-		//is taken back instead, which is what this is for.
+		//Whatever is nearest now, rather than whatever was walked into last
+		PromoteNearest();
+
+		//Interacting wins over swinging. The StateMachine looks at attacking before it looks at picking
+		//something up, so a swing that is waiting to be spent takes the turn and the item stays on the
+		//ground. Talking and cooking escape that by moving the input off the gameplay map below; picking up
+		//has nothing to move, so the cached swing is taken back instead.
+		//This mattered most while the left button both attacked and worked the HUD, which it no longer does,
+		//but the ordering is the StateMachine's and holds for a swing asked for any other way too.
 		if (_protagonist != null)
 			_protagonist.ConsumeAttackInput();
 
@@ -152,7 +196,11 @@ public class InteractionManager : MonoBehaviour
 	private void RequestUpdateUI(bool visible)
 	{
 		if (visible)
+		{
+			//So the prompt names the same thing the button would act on
+			PromoteNearest();
 			_toggleInteractionUI.RaiseEvent(true, _potentialInteractions.First.Value.type);
+		}
 		else
 			_toggleInteractionUI.RaiseEvent(false, InteractionType.None);
 	}
