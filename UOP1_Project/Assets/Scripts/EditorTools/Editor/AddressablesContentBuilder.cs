@@ -14,19 +14,35 @@ public static class AddressablesContentBuilder
 	[MenuItem("Tools/Build Addressables Content")]
 	public static void BuildContent()
 	{
-		AddressableAssetSettings.BuildPlayerContent(out AddressablesPlayerBuildResult result);
-
-		bool failed = !string.IsNullOrEmpty(result.Error);
-
-		if (failed)
-			Debug.LogError("Addressables content build failed: " + result.Error);
-		else
-			Debug.Log("Addressables content build done: " + result.LocationCount + " locations in "
-					  + result.Duration.ToString("0.0") + "s -> " + result.OutputPath);
+		bool built = TryBuildContent();
 
 		//Batchmode reports success whatever happens, so the exit code has to be set here to be worth
 		//anything to whatever is driving the build
 		if (Application.isBatchMode)
-			EditorApplication.Exit(failed ? 1 : 0);
+			EditorApplication.Exit(built ? 0 : 1);
+	}
+
+	/// <summary>
+	/// Rebuilds the content and says whether it worked, leaving the editor running.
+	/// </summary>
+	/// <remarks>
+	/// Kept apart from the entry point above so a caller can go on to build the player in the same session.
+	/// Starting the editor costs about fifteen seconds - loading the project, refreshing scripts, checking
+	/// the licence - which is longer than this takes, and paying it twice for what is really one build was
+	/// most of the wait.
+	/// </remarks>
+	public static bool TryBuildContent()
+	{
+		AddressableAssetSettings.BuildPlayerContent(out AddressablesPlayerBuildResult result);
+
+		if (!string.IsNullOrEmpty(result.Error))
+		{
+			Debug.LogError("Addressables content build failed: " + result.Error);
+			return false;
+		}
+
+		Debug.Log("Addressables content build done: " + result.LocationCount + " locations in "
+				  + result.Duration.ToString("0.0") + "s -> " + result.OutputPath);
+		return true;
 	}
 }
