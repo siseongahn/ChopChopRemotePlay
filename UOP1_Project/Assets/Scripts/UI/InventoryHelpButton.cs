@@ -66,13 +66,13 @@ public class InventoryHelpButton : MonoBehaviour
 
 		if (_icon != null)
 		{
-			//The close button's X is a child of its own. Emptying the label was not enough to be rid of
-			//it, so with an icon the face is cleared outright: the whole button is the picture, and its
-			//size comes from its own rect rather than from anything underneath.
+			//The close button's X is a child of its own, and emptying the label was not enough to be rid of
+			//it, so the face is cleared and our picture put there instead. The disc the button is drawn as
+			//stays: this is the same round button as the one beside it, wearing a different face.
 			for (int i = help.transform.childCount - 1; i >= 0; i--)
 				Destroy(help.transform.GetChild(i).gameObject);
 
-			DrawAsIcon(help);
+			DrawIconOnDisc(help);
 		}
 		else
 		{
@@ -95,40 +95,37 @@ public class InventoryHelpButton : MonoBehaviour
 			return;
 		}
 
-		//The button tints its graphic as it is hovered and pressed, and puts the resting tint back
-		//afterwards; left alone that would colour the icon rather than the disc it was picked for.
-		if (_icon != null)
-		{
-			ColorBlock colors = button.colors;
-			colors.normalColor = Color.white;
-			button.colors = colors;
-		}
-
 		//The clone came with whatever closes the inventory wired up
 		button.onClick.RemoveAllListeners();
 		button.onClick.AddListener(OpenHelpPage);
 	}
 
-	/// Makes the button the icon, rather than laying the icon over the close button's red disc.
-	private void DrawAsIcon(GameObject help)
+	/// Lays the icon on the button's disc, leaving the disc itself alone.
+	private void DrawIconOnDisc(GameObject help)
 	{
-		//The button's own graphic is that disc, so replacing its sprite is what removes it
-		Image face = help.GetComponent<Image>();
-		if (face == null)
-		{
-			Debug.LogWarning("InventoryHelpButton: the cloned button has no Image to draw the icon on");
-			return;
-		}
+		//RectTransform asked for outright: a new GameObject comes with a plain Transform, and the cast below
+		//has to be sound
+		var icon = new GameObject("Icon", typeof(RectTransform), typeof(Image));
+		var rect = (RectTransform)icon.transform;
+		rect.SetParent(help.transform, false);
 
-		face.sprite = _icon;
+		//Inset from the rim by a share of the button rather than a count of pixels, so the picture sits
+		//within the disc at whatever size the shared button is styled to.
+		const float inset = .18f;
+		rect.anchorMin = new Vector2(inset, inset);
+		rect.anchorMax = new Vector2(1f - inset, 1f - inset);
+		rect.offsetMin = Vector2.zero;
+		rect.offsetMax = Vector2.zero;
 
-		//The disc was drawn sliced to stretch its border; the icon is a plain picture and would be
-		//pulled about by that, and it is not square once the button is
-		face.type = Image.Type.Simple;
-		face.preserveAspect = true;
+		Image drawn = icon.GetComponent<Image>();
+		drawn.sprite = _icon;
 
-		//The disc carried its red in the tint rather than the sprite
-		face.color = Color.white;
+		//The icon is not square where the box it is given is, and stretching it would be obvious
+		drawn.preserveAspect = true;
+
+		//The button tints its own graphic, which is the disc underneath. Staying off the raycast keeps the
+		//click on the button rather than on the picture sitting over it.
+		drawn.raycastTarget = false;
 	}
 
 	private void OpenHelpPage()
