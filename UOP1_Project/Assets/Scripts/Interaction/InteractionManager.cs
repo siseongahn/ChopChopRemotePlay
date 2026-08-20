@@ -195,7 +195,10 @@ public class InteractionManager : MonoBehaviour
 
 	private void RequestUpdateUI(bool visible)
 	{
-		if (visible)
+		//Asking to show it is not the same as having something to show. Cooking and talking ask for the prompt
+		//back when they finish, and by then the player may have walked away from the pot or the person they
+		//were busy with, leaving nothing in range to name - so this read the type off an empty list.
+		if (visible && _potentialInteractions.Count > 0)
 		{
 			//So the prompt names the same thing the button would act on
 			PromoteNearest();
