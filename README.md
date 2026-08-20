@@ -97,6 +97,42 @@ than twice.
 
 ## Remote play
 
+### What actually runs
+
+A session is not one process. The game starts, and RemotePlay brings up its own alongside it:
+
+| Process | What it is |
+|---|---|
+| `ChopChop.exe` | The game. Loads `plugins/RemotePlayDll.dll` and receives the callback |
+| `plugins/RemotePlay/HiveRemoteHost.exe` | **The host process.** Its own version info calls it `Hive SDK Remote Play Host Process` |
+| `plugins/RemotePlay/HiveRemotePlayServiceMgr.exe` | Service manager |
+| `plugins/RemotePlay/HiveVirtualInput.exe` | Virtual input helper |
+| `cef.subprocess.exe` | CEF renderer children, one or more, when the in-app browser is open |
+
+`HiveRemoteStreamer.dll` does the streaming in-process; `HiveRemoteStreamer.dat` beside it is written
+at runtime rather than shipped.
+
+Two things about the host process are worth knowing before you spend an afternoon on them.
+
+**It outlives the game.** Quitting or killing `ChopChop.exe` does not necessarily take
+`HiveRemoteHost.exe` with it, and a leftover one holds the build's files open, so the next build
+fails on a file it cannot overwrite. Kill both before building:
+
+```powershell
+Get-Process ChopChop, HiveRemoteHost -ErrorAction SilentlyContinue | Stop-Process -Force
+```
+
+An orphaned host also lined up with a Hive sign-in hang that reproduced three times — the boot got as
+far as the sign-in screen and stopped. Clearing the orphan and rebuilding cleared it. That is an
+observed association rather than a proven cause, but it is the first thing to check when sign-in
+hangs, and it is cheap to rule out.
+
+**It is newer than the package.** The host binary here reports version `1.2.0.33`, while the
+unitypackage this project was set up from is `RemotePlay_Release_1_01_00` — and that package does not
+contain `HiveRemoteHost.exe` at all. So the files under `plugins/RemotePlay/` came from more than one
+drop. If remote play misbehaves in a way none of this explains, checking that those binaries all came
+from the same release is a reasonable early move.
+
 ### Getting the events in
 
 RemotePlay hands the host game a single native callback. `HiveRemotePlayEvents` registers it and
@@ -361,6 +397,41 @@ Unity.exe -quit -batchmode -projectPath <project> \
 ---
 
 ## 원격 플레이
+
+### 실제로 실행되는 프로세스
+
+세션은 프로세스 하나가 아닙니다. 게임이 시작되면 RemotePlay가 자체 프로세스들을 함께 띄웁니다:
+
+| 프로세스 | 정체 |
+|---|---|
+| `ChopChop.exe` | 게임. `plugins/RemotePlayDll.dll`을 로드하고 콜백을 받습니다 |
+| `plugins/RemotePlay/HiveRemoteHost.exe` | **호스트 프로세스.** 파일의 버전 정보가 스스로를 `Hive SDK Remote Play Host Process`라고 밝힙니다 |
+| `plugins/RemotePlay/HiveRemotePlayServiceMgr.exe` | 서비스 관리자 |
+| `plugins/RemotePlay/HiveVirtualInput.exe` | 가상 입력 도우미 |
+| `cef.subprocess.exe` | 인앱 브라우저가 열렸을 때의 CEF 렌더러 자식 프로세스 (하나 이상) |
+
+스트리밍은 `HiveRemoteStreamer.dll`이 인프로세스로 처리합니다. 옆에 있는 `HiveRemoteStreamer.dat`은
+배포된 파일이 아니라 런타임에 생성됩니다.
+
+호스트 프로세스에 대해 두 가지는 미리 알아두는 편이 낫습니다. 모르면 반나절을 씁니다.
+
+**게임보다 오래 살아남습니다.** `ChopChop.exe`를 종료하거나 강제 종료해도 `HiveRemoteHost.exe`가 함께
+사라지지는 않습니다. 남아 있는 프로세스가 빌드 폴더의 파일을 붙잡고 있으면 다음 빌드가 덮어쓸 수 없는
+파일에서 실패합니다. 빌드 전에 둘 다 종료하세요:
+
+```powershell
+Get-Process ChopChop, HiveRemoteHost -ErrorAction SilentlyContinue | Stop-Process -Force
+```
+
+고아가 된 호스트는 Hive 로그인 행과도 겹쳤습니다 — 세 번 재현됐고, 부팅이 로그인 화면까지 가서 멈췄습니다.
+고아 프로세스를 정리하고 다시 빌드하니 해결됐습니다. 인과가 증명된 것은 아니고 관찰된 상관관계이지만,
+로그인이 멈출 때 가장 먼저 확인할 것이고 배제하는 비용도 낮습니다.
+
+**패키지보다 새 버전입니다.** 여기 있는 호스트 바이너리는 버전 `1.2.0.33`을 보고하는데, 이 프로젝트를
+구성할 때 쓴 unitypackage는 `RemotePlay_Release_1_01_00`이고 **그 패키지에는 `HiveRemoteHost.exe`가 아예
+없습니다.** 즉 `plugins/RemotePlay/` 아래 파일들이 서로 다른 드롭에서 왔습니다. 원격 플레이가 여기 적힌
+어떤 설명으로도 해석되지 않는 방식으로 오작동한다면, 그 바이너리들이 같은 릴리스에서 왔는지 확인하는 것이
+합리적인 초기 조치입니다.
 
 ### 이벤트를 받는 부분
 
