@@ -1,5 +1,7 @@
 # Chop Chop with Hive RemotePlay
 
+English | [한국어](#hive-remoteplay를-붙인-chop-chop)
+
 A fork of [Unity Open Project #1: Chop Chop](https://github.com/UnityTechnologies/open-project-1),
 Unity's open-source action-adventure demo, built on **Unity 2020.3 LTS**. Upstream stopped
 development in December 2021; the game itself is unchanged except where noted below.
@@ -261,3 +263,257 @@ fallback locale when that switch is on, and without it the menus read
 
 Upstream releases of the original are on the
 [release page](https://github.com/UnityTechnologies/open-project-1/releases).
+
+---
+---
+
+# Hive RemotePlay를 붙인 Chop Chop
+
+[English](#chop-chop-with-hive-remoteplay) | 한국어
+
+Unity의 오픈소스 액션 어드벤처 데모 [Unity Open Project #1: Chop Chop](https://github.com/UnityTechnologies/open-project-1)의
+포크이며 **Unity 2020.3 LTS**에서 동작합니다. 원본은 2021년 12월에 개발이 중단됐고, 게임 자체는 아래에
+적은 부분을 제외하면 그대로입니다.
+
+이 브랜치가 더한 것은 **Hive SDK**로 로그인하고 **원격 플레이**가 가능한 Windows 빌드입니다. 휴대폰이나
+다른 기기의 뷰어가 Hive RemotePlay를 통해 게임을 조작하며, 터치와 키 입력이 네이티브 콜백으로 들어와
+게임의 일반 입력으로 전달됩니다.
+
+---
+
+## 설치
+
+클론만으로는 빌드되지 않습니다. 벤더 패키지 두 개를 먼저 임포트해야 하고, 둘 다 저장소에 없습니다.
+
+### 1. Hive SDK v4
+
+네이티브 바이너리 약 816MB이며, 211MB짜리 `libcef.dll` 두 개가 대부분을 차지합니다. Hive 개발자 포털에서
+`Hive_SDK_Unity_Windows_Component.unitypackage`를 받아 임포트하면 `UOP1_Project/Assets/Hive_SDK_v4/`가
+채워집니다. 그 폴더에 위치를 알리는 안내 파일이 있습니다.
+
+Hive는 Unity SDK를 **두 개**의 패키지로 배포합니다:
+
+| 패키지 | 내용 | 필요 여부 |
+|---|---|---|
+| Component | 네이티브 플러그인 (`HIVE_PLUGIN.dll`, `HIVE_SERVICE.dll`, CEF 등) | 필요 |
+| Interface | C# API (`AuthV4`, `PlatformHelper`, `Configuration` 등) | 필요 |
+
+여기에는 Component만 임포트되어 있어서 C#은 이전 설치가 남긴 버전입니다. 둘은 맞물린 함수 시그니처가 아니라
+JSON 문자열로 통신하므로 버전 차이가 치명적이지는 않지만, 어긋나 있는 것은 사실입니다. 가능하면 짝이 맞는
+두 패키지를 모두 임포트하세요.
+
+`Assets/MiniJSON/`은 같은 패키지에 들어 있어 같은 이유로 제외됩니다.
+
+### 2. Hive RemotePlay
+
+SDK와 별개인 약 18MB의 드롭입니다. `RemotePlay_Release_*.unitypackage`를 임포트하면
+`UOP1_Project/Assets/HiveRemotePlay/`가 채워지고, 이 폴더에도 안내 파일이 있습니다. 내용은:
+
+- `Plugins/windows/RemotePlayDll.dll` — 게임이 직접 호출하는 라이브러리
+- `Plugins/windows/HiveRemoteStreamer.dll` — 스트리머
+- `Plugins/windows/HiveRemotePlayServiceMgr.exe`, `HiveVirtualInput.exe` — 함께 실행되는 도우미
+- `Editor/HiveRemotePlayPostprocess.cs` — 자체 포스트빌드 단계. 위 파일들을 빌드된 실행 파일 옆
+  `plugins/`에 배치합니다
+- `Scripts/RemotePlayManager.cs`
+
+### 3. 설정
+
+`Assets/Plugins/Windows/res/hive_config.xml`은 저장소에 포함되며 앱의 Hive 식별자를 담고 있습니다.
+빌드 시 `resources/hive_config.xml`로 복사됩니다.
+
+### 빌드가 대신 해주는 일
+
+`HiveSDKWindowsPostBuild`는 모든 Windows 빌드에서 실행되어 출하된 Hive 타이틀의 배치를 재현합니다 —
+`Plugins/Windows/additional`의 전체를 빌드 루트에, `hive_string`과 `hive_config.xml`을 `resources/`
+아래에 둡니다. RemotePlay는 자체 포스트빌드 단계가 `plugins/` 폴더를 같은 방식으로 처리합니다.
+
+게임은 네이티브 라이브러리를 `plugins/RemotePlayDll`로 로드하며, 이는 **작업 디렉터리** 기준으로
+해석됩니다. 실행 파일을 더블클릭하면 문제없습니다. 작업 디렉터리가 다른 곳에서 실행하면 시작 시
+`DllNotFoundException`이 나고 이벤트가 하나도 도착하지 않습니다.
+
+---
+
+## 빌드
+
+진입점이 둘이고, 모두 명령줄에서 쓸 수 있으며 **종료 코드로 실패를 알립니다.** batchmode는 그렇게 하지
+않습니다 — 실패해도 성공을 보고하므로, 실패한 빌드가 성공한 빌드와 똑같이 보입니다.
+
+```bash
+# 애셋이 바뀐 경우 (프리팹, 로케일, 테이블): 콘텐츠 번들 후 플레이어
+Unity.exe -quit -batchmode -projectPath <project> \
+  -executeMethod GameBuilder.BuildContentAndPlayer -logFile <log>
+
+# 스크립트만 바뀐 경우
+Unity.exe -quit -batchmode -projectPath <project> \
+  -executeMethod GameBuilder.BuildPlayerOnly -logFile <log>
+```
+
+번들만 만들고 싶으면 `AddressablesContentBuilder.BuildContent`가 있습니다. `-buildOutput <path>`로
+출력 위치를 바꿀 수 있습니다.
+
+**애셋을 수정하고 플레이어만 빌드하면 게임은 이전 번들의 내용을 계속 불러옵니다.** 씬과 그것이 끌어오는
+모든 프리팹이 Addressables에서 나오므로, 애셋 변경에는 콘텐츠 빌드가 먼저 필요합니다. 코드는 번들에
+들어가지 않으니 스크립트 변경에는 필요 없습니다.
+
+에디터는 요청받은 일을 시작하기 전에 약 15초를 씁니다 — Addressables 빌드보다 긴 시간입니다.
+`BuildContentAndPlayer`가 존재하는 이유는 그 비용을 두 번이 아니라 한 번만 내기 위해서입니다.
+
+---
+
+## 원격 플레이
+
+### 이벤트를 받는 부분
+
+RemotePlay는 호스트 게임에 네이티브 콜백 하나를 넘깁니다. `HiveRemotePlayEvents`가 그것을 등록하고
+페이로드를 해석하며, `RemotePlayInputRouter`가 입력으로 바꿉니다.
+
+콜백은 RemotePlay 자체 스레드에서 오고, 네이티브 코드로 예외가 되돌아가면 프로세스가 함께 죽으므로 본문
+전체가 `try` 안에 있습니다. IL2CPP가 요구하는 `[MonoPInvokeCallback]`이 붙어 있고, 델리게이트는 정적
+필드에 보관합니다 — 등록이 끝나면 그것을 붙잡는 것이 아무것도 없어서, 그러지 않으면 수집되고 첫 이벤트가
+프로세스를 죽입니다.
+
+한 콜백으로 세 종류가 도착하는데 `type` 인수로는 구분되지 않습니다. 채팅은 0으로 오지만 상태와 컨트롤이
+모두 1로 오므로, 분기해야 하는 것은 `eventType` 필드입니다.
+
+| `eventType` | 내용 |
+|---|---|
+| `Event` | 스트림 연결과 해제 |
+| `Message` | 뷰어가 입력한 채팅. UTF-8 보존을 위해 base64 |
+| `Control` | 키 입력, 터치, 휠 — 실제로 게임을 조작하는 것 |
+
+`Control`은 역직렬화 형태가 따로 필요합니다. 다른 둘은 문자열을 담는 자리에 `eventValue.value`가
+**객체**로 옵니다.
+
+| `controlType` | `controlValue.value` |
+|---|---|
+| `Key` | Windows 가상 키 코드 (16진수) |
+| `Click` | 스트림 좌표계의 `"X#Y"` |
+| `Wheel` | 같은 `"X#Y"`, 방향은 `action`에 |
+
+`action`은 `Down`, `Move`, `Up`, `Out`입니다. `Out`은 포인터가 스트림 화면을 벗어난 것이고, 그때 쥐고
+있던 것을 놓아주지 않으면 버튼이 영구히 눌린 상태로 남습니다.
+
+스트림 좌표는 **Unity `Screen`과 1:1**이며 Y가 반전됩니다. 이것을 win32 클라이언트 사각형으로 재려 하면
+안 됩니다. Windows는 DPI 인식을 선언하지 않은 프로세스에 대해 그 값을 가상화하므로, 150% 배율에서
+1680x1050 창에 대해 `GetClientRect`가 1120x700을 답합니다 — 존재하지 않는 1.5배 스트림으로 읽힙니다.
+
+### 입력으로 바꾸는 부분
+
+라우터는 게임의 기존 디바이스에 이벤트를 위조하는 대신 자체 `Keyboard`와 `Mouse`를 Input System에
+추가합니다. 그러면 뷰어의 입력이 다른 디바이스와 동등해지고 기존 바인딩이 그대로 받습니다.
+
+UI 위에 내려온 손가락은 그 제스처가 끝날 때까지 UI를 가리키는 것으로 취급하며, 판정은 손가락이 닿는
+순간에 확정됩니다. 게임 중에는 이동한 손가락이 카메라를 돌리고 이동하지 않은 손가락은 탭입니다. 이렇게
+고정해 두면 중간에 메뉴가 열려도 제스처의 의미가 바뀌지 않고, HUD 버튼에서 손가락이 미세하게 흔들려도
+탭이 카메라 드래그로 변하지 않습니다.
+
+**UI 클릭은 직접 전달합니다.** `InputSystemUIInputModule`은 가상 마우스를 포인터로 추적하지 않아서,
+공격과 이동은 되는데 뷰어의 손가락 아래 버튼은 아무 반응이 없었습니다. 라우터가 매핑된 좌표로
+`EventSystem` 레이캐스트를 하고 포인터 이벤트를 직접 보냅니다. 그리고 UI 탭에서는 마우스 버튼을 **누르지
+않습니다** — 함께 누르면 모듈이 포인터를 따라오는 경우에 클릭이 두 번 전달되고, 가방을 탭할 때 칼까지
+휘둘렀습니다.
+
+뷰어가 연결된 동안에는 **머신의 마우스가 물러납니다.** 두 포인터가 같은 UI를 두고 다투지 않게 하기
+위해서입니다. 연결이 끊기면 돌아오고, 종료 시에도 무조건 돌려줍니다.
+
+컨트롤 이벤트는 **뷰어가 떠난 뒤에도 계속 도착하므로**, 세션이 열려 있지 않으면 무시합니다. 이미 진행
+중인 세션에 게임이 시작되면 시작을 들을 수 없으므로(RemotePlay는 변화만 보고합니다) 도착하는 컨트롤
+이벤트를 누군가 있다는 증거로 삼되, 연결/해제가 한 번이라도 보고된 뒤에는 그것을 따릅니다.
+
+### 시계를 실제 시간에 붙여 두기
+
+세션 중 모니터를 끄면 게임이 슬로우 모션이 됐습니다 — 끊김 없이 매끄럽게 약 5분의 1 속도로, 오디오는
+정확한 시간을 유지한 채로. 화면이 꺼지고 뷰어가 연결된 상태에서 측정한 값:
+
+```
+프레임 전달        78.6ms   (12.7 fps)
+Time.deltaTime    16.65ms  (고정)
+시뮬레이션은 실시간의 0.212배, 오디오는 1.000배
+```
+
+16.65ms는 60Hz의 리프레시 간격 하나입니다. VSync가 켜져 있으면 프레임은 다음 블랭킹 간격을 기다리며
+끝나는데, 표시되는 것이 없으면 그 대기가 길어지는 동안 엔진이 넘기는 delta는 리프레시 하나에 해당하는
+값에 머무릅니다. 모든 프레임이 같은 시간 간격을 받았고, 그래서 더듬거리지 않고 고르게 느려졌습니다.
+
+그래서 뷰어가 보고 있는 동안에는 `RemotePlayFramePacing`이 프레임을 타이머로 맞춥니다 — VSync를 끄고
+목표 프레임레이트를 설정합니다. 뷰어의 프레임레이트는 이 머신의 리프레시와 무관하기 때문입니다. 이전
+값은 저장해 두고 연결 해제 시 되돌립니다. 같은 조건에서 이후 측정값: 59.3 fps, delta 16.85ms 대 실제
+16.85ms, 비율 1.000.
+
+`DisplaySleepBlock`은 더 작은 쪽입니다. Windows가 유휴로 화면을 끄면 뷰어에게 검은 화면이 전송되므로,
+세션 동안 디스플레이를 깨어 있게 요청합니다. 요청은 **메인 스레드에서** 합니다 — 그 요청은 호출한
+스레드에 귀속되고 플러그인의 콜백 스레드는 의존할 대상이 아닙니다. 머신이 **절전에 들어간 뒤에는** 이
+방법이 통하지 않습니다(요청할 코드가 실행되지 않습니다). 모니터 전원 버튼을 직접 끄는 경우도 막지
+못하는데, 그것이 페이싱 수정이 담당하는 부분입니다.
+
+이식할 때 알아둘 것: `ES_DISPLAY_REQUIRED`는 Modern Standby 시스템에서 무시됩니다. `powercfg /a`로
+확인하세요. S3 머신은 이 요청을 존중하고, S0 저전력 유휴 머신은 무시하며 `PowerCreateRequest`가
+필요합니다.
+
+### 뷰어가 쓸 수 있는 조작
+
+뷰어에게는 손가락 하나뿐이므로, 게임이 키보드를 요구했던 것들을 포인터로 옮겼습니다.
+
+| 동작 | 방법 |
+|---|---|
+| 이동 | 땅을 클릭 또는 탭하면 그곳으로 걸어갑니다 |
+| 카메라 | 드래그 |
+| 줌 | 휠 |
+| 공격 | HUD 우하단 버튼 |
+| 인벤토리 | HUD의 가방 |
+| 상호작용 | 프롬프트 아이콘 — 대화, 요리, 줍기 |
+| 대화 진행 | 대화창 클릭 |
+
+땅 클릭은 좌표를 직접 옮기는 대신 **그곳으로 향하는 스틱 입력으로 변환**합니다. 그러면 걷기가 키를 누른
+것과 같은 회전, 가속, 애니메이션, 상태를 거칩니다. 키에 손이 닿으면 즉시 취소됩니다. 직선으로만 조향하고
+경로를 모르므로, 목표가 가까워지지 않으면 포기합니다 — 벽이 막고 있을 때가 그렇게 보입니다.
+
+좌클릭은 원래 공격이었고, 둘은 공유할 수 없습니다. 모든 걸음이 칼질로 시작되고, 칼질은 걷는 속도를
+20분의 1로 떨어뜨립니다. 그래서 HUD 버튼이 생겼는데, 이는 뷰어가 공격할 수 있게 된 첫 수단이기도
+합니다. 키와 게임패드 버튼은 그대로입니다.
+
+---
+
+## 이 브랜치의 그 외 변경
+
+**한국어.** 349개 항목 — 대화, 등장인물 이름, 메뉴, 아이템 이름과 설명. 게임이 출하한 폰트들이 모두
+라틴 문자만 그리므로 Noto Sans KR을 폴백으로 등록했습니다. 번역이 없는 항목은 영어로 대체되는데, 이를
+위해 로케일의 폴백 메타데이터와 데이터베이스의 `UseFallback` 스위치가 **둘 다** 필요했습니다. 조회
+코드는 그 스위치가 켜져 있을 때만 폴백 로케일을 찾고, 없으면 메뉴에
+`No translation found for 'Continue' in UI Misc`가 표시됩니다.
+
+**작업 중 발견한 게임 버그** — 모두 이 브랜치가 만든 것이 아니라 원본에 있던 것입니다:
+
+- `GameStateSO`가 경계 적 목록을 `Start`에서 만드는데, Unity는 ScriptableObject에 `Start`를 호출하지
+  않습니다. 모든 호출이 예외를 던졌고 `GameState.Combat`으로 가는 유일한 경로가 그 예외 뒤에 있어서 그
+  상태에 도달할 수 없었으며, 그것을 기준으로 하는 가드들이 전혀 동작하지 않았습니다. 이것을 고치자
+  전투가 처음으로 동작했고, 그 뒤에 숨어 있던 결함 두 개가 드러났습니다.
+- 적이 죽는 상태를 거치지 않고 씬과 함께 사라지면 전투가 끝나지 않았습니다.
+- 요리나 대화가 끝난 시점에 플레이어가 대상에서 멀어져 있으면, 상호작용 프롬프트가 빈 목록에서 타입을
+  읽었습니다.
+- 설정의 언어 항목이 한 칸 뒤처져 표시됐습니다. 라벨을 다시 그리는 콜백을 잠시 끊어 놓고 그 일을 대신
+  하지 않았기 때문입니다.
+
+---
+
+## 걸려 넘어지기 쉬운 것들
+
+- **batchmode는 빌드가 실패해도 0을 반환합니다.** 그래서 두 빌드 진입점이 종료 코드를 직접 설정합니다.
+  `Unity.exe -quit -batchmode`만 놓고 신뢰하지 마세요.
+- **신규 직렬화 필드는 기존 번들에서 0으로 역직렬화됩니다** — C# 초기화 값이 아닙니다. 에디터에서는
+  정상이고 빌드에서는 비어 있습니다. 스크립트와 함께 프리팹에도 값을 써 넣어야 합니다.
+- **입력 바인딩 변경은 생성된 `GameInput.cs`도 함께 수정해야 합니다.** batchmode에서 재생성되지 않고,
+  런타임은 `.inputactions` 애셋이 아니라 그 파일에 임베드된 JSON을 읽습니다.
+- **새 로케일용 그룹은 빌드/로드 경로가 비어 있는 상태로 생성되며**, Addressables는 그룹 이름도 알려주지
+  않고 `the given key was not present in the dictionary`로 콘텐츠 빌드 전체를 실패시킵니다.
+  `KoreanLocalizationBuilder`가 이를 복구합니다.
+- **배포하면 안 되는 것**: `ChopChop_BackUpThisFolder_ButDontShipItWithYourGame`(이름이 곧 힌트입니다),
+  `cache` 폴더(런타임에 생성되는 Chromium 프로필), `cefsubprocess/*.lib`(링크 시점 라이브러리 약
+  189MB, 로드되지 않음).
+
+---
+
+## 게임 실행
+
+원본의 릴리스는 [release page](https://github.com/UnityTechnologies/open-project-1/releases)에
+있습니다.
