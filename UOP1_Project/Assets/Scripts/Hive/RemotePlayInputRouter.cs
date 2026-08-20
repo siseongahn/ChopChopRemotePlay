@@ -138,6 +138,11 @@ public class RemotePlayInputRouter : MonoBehaviour
 
 	private void OnDestroy()
 	{
+		//Quitting mid-session would otherwise leave the machine unable to idle, since the request outlives
+		//nothing on its own
+		DisplaySleepBlock.Release();
+		RemotePlayFramePacing.Release();
+
 		//Whatever happens, the machine gets its mouse back
 		if (_machineMouseWasDisabled)
 		{
@@ -502,6 +507,25 @@ public class RemotePlayInputRouter : MonoBehaviour
 			return;
 
 		_handledConnected = s_Connected;
+
+		//Before anything that can bail out, and on this thread rather than the one the status arrived on: the
+		//power request belongs to whichever thread asks, and the plugin's callback thread is not ours to
+		//depend on. Without this the screen goes dark on an untouched machine and the game drops to a fifth
+		//of real speed, smoothly, while the audio keeps time.
+		if (s_Connected)
+		{
+			DisplaySleepBlock.Hold();
+
+			//And stop taking the local display's word for when a frame is done. A power request can keep
+			//Windows from idling the screen out, but not a hand on the monitor's power button, and the clock
+			//the game moves by should not depend on either.
+			RemotePlayFramePacing.Hold();
+		}
+		else
+		{
+			DisplaySleepBlock.Release();
+			RemotePlayFramePacing.Release();
+		}
 
 		Mouse machines = FindMachinesMouse();
 		if (machines == null)
