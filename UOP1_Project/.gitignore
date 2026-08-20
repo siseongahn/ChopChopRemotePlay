@@ -81,10 +81,20 @@ Assets/PolybrushData*
 # Hive SDK is a vendor drop (~816MB of native binaries, incl. two 211MB libcef.dll).
 # Import the Hive_SDK_v4 unitypackage into the project instead of tracking it here.
 # MiniJSON ships inside the same package, so it is excluded too.
-/Assets/Hive_SDK_v4/
-/Assets/Hive_SDK_v4.meta
+#
+# The folders themselves are kept, each with a note in it, so a fresh clone shows where the
+# packages go rather than leaving someone to work it out from a DllNotFoundException.
+/Assets/Hive_SDK_v4/*
+!/Assets/Hive_SDK_v4/PLACE_HIVE_SDK_HERE.md
+!/Assets/Hive_SDK_v4/PLACE_HIVE_SDK_HERE.md.meta
 /Assets/MiniJSON/
 /Assets/MiniJSON.meta
+
+# Hive RemotePlay is a separate drop from the SDK, about 18MB of native binaries and helper
+# executables. Its own post-build step lays them out next to the built player.
+/Assets/HiveRemotePlay/*
+!/Assets/HiveRemotePlay/PLACE_REMOTE_PLAY_HERE.md
+!/Assets/HiveRemotePlay/PLACE_REMOTE_PLAY_HERE.md.meta
 
 # Asset Bundles folder and .bin file
 /Assets/StreamingAssets
