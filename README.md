@@ -39,14 +39,31 @@ version gap is tolerated rather than fatal — but it is a gap. Import both, mat
 ### 2. Hive RemotePlay
 
 A separate drop, roughly 18MB. Import `RemotePlay_Release_*.unitypackage`; it fills
-`UOP1_Project/Assets/HiveRemotePlay/`, which also carries a note. Inside:
+`UOP1_Project/Assets/HiveRemotePlay/`, which also carries a note. Built against
+`RemotePlay_Release_1_02_00`. Inside:
 
 - `Plugins/windows/RemotePlayDll.dll` — the library the game talks to
 - `Plugins/windows/HiveRemoteStreamer.dll` — the streamer
+- `Plugins/windows/HiveRemoteHost.exe` — the host process
 - `Plugins/windows/HiveRemotePlayServiceMgr.exe`, `HiveVirtualInput.exe` — helpers it starts
-- `Editor/HiveRemotePlayPostprocess.cs` — its own post-build step, which lays those out under
-  `plugins/` beside the built player
+- `Editor/HiveRemotePlayPostprocess.cs` — a post-build step meant to lay those out under `plugins/`
+  beside the built player
 - `Scripts/RemotePlayManager.cs`
+
+**That post-build step does not run on its own.** It is marked `[HiveEditor.HivePostBuild(101)]`, and
+the SDK ships the attribute and the context struct but nothing that goes looking for them — so the
+method compiles and is never called, and the binaries never reach the build. That is why they used to
+be copied into the build folder by hand.
+
+`HiveSDKWindowsPostBuild` now drives them: it collects every static method carrying the attribute,
+orders them by the number in it, and calls each with a context whose deploy path is `<build>/plugins`.
+Any Hive plugin using the same extension point will be picked up without further work.
+
+It also copies `HiveRemoteHost.exe`, because **RemotePlay's own step does not.** The 1.02.00 package
+ships the host but the copy list omits it, so a build assembled purely by the vendor's script comes
+out missing the process it needs.
+
+Import the package, build, and `plugins/` fills itself. Nothing is placed by hand.
 
 ### 3. Configuration
 
@@ -57,7 +74,8 @@ copied to `resources/hive_config.xml` at build time.
 
 `HiveSDKWindowsPostBuild` runs on every Windows build and mirrors the layout of a shipped Hive title:
 everything from `Plugins/Windows/additional` at the build root, `hive_string` and `hive_config.xml`
-under `resources/`. RemotePlay's own post-build step does the same for its `plugins/` folder.
+under `resources/`. It then drives the plugins' own `[HivePostBuild]` steps, which fill `plugins/`
+(see [Hive RemotePlay](#2-hive-remoteplay) — the SDK never calls them by itself).
 
 The game loads the native library as `plugins/RemotePlayDll`, resolved against the **working
 directory**. Double-clicking the executable is fine. Launching it from somewhere else with a
@@ -127,11 +145,12 @@ far as the sign-in screen and stopped. Clearing the orphan and rebuilding cleare
 observed association rather than a proven cause, but it is the first thing to check when sign-in
 hangs, and it is cheap to rule out.
 
-**It is newer than the package.** The host binary here reports version `1.2.0.33`, while the
-unitypackage this project was set up from is `RemotePlay_Release_1_01_00` — and that package does not
-contain `HiveRemoteHost.exe` at all. So the files under `plugins/RemotePlay/` came from more than one
-drop. If remote play misbehaves in a way none of this explains, checking that those binaries all came
-from the same release is a reasonable early move.
+**These used to be a mixture of releases.** They were placed in the build folder by hand — because
+the vendor's post-build step was never called — and the host reported a version the project's own
+package did not even contain. Importing `RemotePlay_Release_1_02_00` and letting the build lay the
+folder out changed the size of *every* binary, which confirmed the old ones had come from more than
+one drop. They now all come from whichever package is imported. If remote play misbehaves in a way
+none of this explains, deleting `plugins/` and rebuilding is a cheap way to be sure of that again.
 
 ### Getting the events in
 
@@ -343,14 +362,31 @@ JSON 문자열로 통신하므로 버전 차이가 치명적이지는 않지만,
 ### 2. Hive RemotePlay
 
 SDK와 별개인 약 18MB의 드롭입니다. `RemotePlay_Release_*.unitypackage`를 임포트하면
-`UOP1_Project/Assets/HiveRemotePlay/`가 채워지고, 이 폴더에도 안내 파일이 있습니다. 내용은:
+`UOP1_Project/Assets/HiveRemotePlay/`가 채워지고, 이 폴더에도 안내 파일이 있습니다.
+`RemotePlay_Release_1_02_00` 기준입니다. 내용은:
 
 - `Plugins/windows/RemotePlayDll.dll` — 게임이 직접 호출하는 라이브러리
 - `Plugins/windows/HiveRemoteStreamer.dll` — 스트리머
+- `Plugins/windows/HiveRemoteHost.exe` — 호스트 프로세스
 - `Plugins/windows/HiveRemotePlayServiceMgr.exe`, `HiveVirtualInput.exe` — 함께 실행되는 도우미
-- `Editor/HiveRemotePlayPostprocess.cs` — 자체 포스트빌드 단계. 위 파일들을 빌드된 실행 파일 옆
-  `plugins/`에 배치합니다
+- `Editor/HiveRemotePlayPostprocess.cs` — 위 파일들을 빌드된 실행 파일 옆 `plugins/`에 배치하도록
+  의도된 포스트빌드 단계
 - `Scripts/RemotePlayManager.cs`
+
+**이 포스트빌드 단계는 스스로 실행되지 않습니다.** `[HiveEditor.HivePostBuild(101)]`가 붙어 있지만, SDK는
+어트리뷰트와 컨텍스트 구조체만 제공하고 그것을 찾아 호출하는 쪽은 제공하지 않습니다 — 즉 메서드는 컴파일만
+되고 한 번도 호출되지 않으며, 바이너리는 빌드에 도달하지 않습니다. 그래서 그동안 손으로 빌드 폴더에
+복사해 넣어야 했습니다.
+
+이제 `HiveSDKWindowsPostBuild`가 이를 구동합니다. 어트리뷰트가 붙은 모든 정적 메서드를 모아 어트리뷰트에
+적힌 숫자 순으로 정렬하고, 배포 경로가 `<build>/plugins`인 컨텍스트와 함께 각각 호출합니다. 같은 확장
+지점을 쓰는 다른 Hive 플러그인도 추가 작업 없이 함께 동작합니다.
+
+`HiveRemoteHost.exe`도 함께 복사합니다. **RemotePlay 자체 단계는 이 파일을 복사하지 않기** 때문입니다.
+1.02.00 패키지는 호스트를 포함하지만 복사 목록에서 빠져 있어, 벤더 스크립트만으로 구성한 빌드는 정작 필요한
+프로세스가 없는 상태로 나옵니다.
+
+패키지를 임포트하고 빌드하면 `plugins/`가 스스로 채워집니다. 손으로 놓는 파일은 없습니다.
 
 ### 3. 설정
 
@@ -361,7 +397,8 @@ SDK와 별개인 약 18MB의 드롭입니다. `RemotePlay_Release_*.unitypackage
 
 `HiveSDKWindowsPostBuild`는 모든 Windows 빌드에서 실행되어 출하된 Hive 타이틀의 배치를 재현합니다 —
 `Plugins/Windows/additional`의 전체를 빌드 루트에, `hive_string`과 `hive_config.xml`을 `resources/`
-아래에 둡니다. RemotePlay는 자체 포스트빌드 단계가 `plugins/` 폴더를 같은 방식으로 처리합니다.
+아래에 둡니다. 그다음 플러그인들의 `[HivePostBuild]` 단계를 구동해 `plugins/`를 채웁니다
+([Hive RemotePlay](#2-hive-remoteplay-1) 참고 — SDK는 이 단계를 스스로 호출하지 않습니다).
 
 게임은 네이티브 라이브러리를 `plugins/RemotePlayDll`로 로드하며, 이는 **작업 디렉터리** 기준으로
 해석됩니다. 실행 파일을 더블클릭하면 문제없습니다. 작업 디렉터리가 다른 곳에서 실행하면 시작 시
@@ -427,11 +464,12 @@ Get-Process ChopChop, HiveRemoteHost -ErrorAction SilentlyContinue | Stop-Proces
 고아 프로세스를 정리하고 다시 빌드하니 해결됐습니다. 인과가 증명된 것은 아니고 관찰된 상관관계이지만,
 로그인이 멈출 때 가장 먼저 확인할 것이고 배제하는 비용도 낮습니다.
 
-**패키지보다 새 버전입니다.** 여기 있는 호스트 바이너리는 버전 `1.2.0.33`을 보고하는데, 이 프로젝트를
-구성할 때 쓴 unitypackage는 `RemotePlay_Release_1_01_00`이고 **그 패키지에는 `HiveRemoteHost.exe`가 아예
-없습니다.** 즉 `plugins/RemotePlay/` 아래 파일들이 서로 다른 드롭에서 왔습니다. 원격 플레이가 여기 적힌
-어떤 설명으로도 해석되지 않는 방식으로 오작동한다면, 그 바이너리들이 같은 릴리스에서 왔는지 확인하는 것이
-합리적인 초기 조치입니다.
+**한때 서로 다른 릴리스가 섞여 있었습니다.** 벤더의 포스트빌드 단계가 호출되지 않았기 때문에 손으로 빌드
+폴더에 넣어야 했고, 호스트는 프로젝트가 쓰는 패키지에 들어 있지도 않은 버전을 보고했습니다.
+`RemotePlay_Release_1_02_00`을 임포트하고 빌드가 폴더를 구성하게 하자 **모든** 바이너리의 크기가 바뀌었고,
+이로써 이전 파일들이 여러 드롭에서 왔다는 것이 확인됐습니다. 이제는 임포트한 패키지 하나에서만 옵니다.
+원격 플레이가 여기 적힌 어떤 설명으로도 해석되지 않는 방식으로 오작동한다면, `plugins/`를 삭제하고 다시
+빌드하는 것이 이를 다시 확인하는 값싼 방법입니다.
 
 ### 이벤트를 받는 부분
 

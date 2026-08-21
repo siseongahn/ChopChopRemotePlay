@@ -1,7 +1,11 @@
+using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
+using UnityEditor.HiveEditor;
 using UnityEngine;
 
 /// Lays out the native Hive SDK next to the built executable. The SDK drop ships the attribute
@@ -57,6 +61,73 @@ public class HiveSDKWindowsPostBuild : IPostprocessBuildWithReport
 			Debug.LogWarning("Hive config not found: " + HiveConfigPath);
 
 		Debug.Log("Hive SDK (windows) copy done.");
+
+		RunHivePluginPostBuildSteps(report.summary, buildPath);
+		CopyRemotePlayHost(buildPath);
+	}
+
+	/// Calls the post-build steps that Hive plugins mark with [HivePostBuild].
+	///
+	/// The SDK ships the attribute and the context struct but nothing that looks for them, so a plugin
+	/// carrying such a step compiles and then never runs - which is why the RemotePlay binaries had to be
+	/// placed in the build by hand before this existed. Ordering is the attribute's own.
+	private static void RunHivePluginPostBuildSteps(BuildSummary summary, string buildPath)
+	{
+		//RemotePlay's step puts RemotePlayDll.dll at the root of this and the rest under RemotePlay/, which
+		//is the layout a working build has
+		string pluginDeployPath = Path.Combine(buildPath, "plugins");
+		Directory.CreateDirectory(pluginDeployPath);
+
+		var context = new HivePostBuildContext(summary, pluginDeployPath);
+
+		var steps = new List<MethodInfo>();
+		foreach (MethodInfo method in TypeCache.GetMethodsWithAttribute<HivePostBuildAttribute>())
+		{
+			ParameterInfo[] parameters = method.GetParameters();
+			if (!method.IsStatic || parameters.Length != 1 || parameters[0].ParameterType != typeof(HivePostBuildContext))
+			{
+				Debug.LogWarning("Hive post-build: skipping " + method.DeclaringType?.Name + "." + method.Name
+								 + ", it does not take a single HivePostBuildContext");
+				continue;
+			}
+
+			steps.Add(method);
+		}
+
+		steps.Sort((a, b) => a.GetCustomAttribute<HivePostBuildAttribute>().Order
+							 .CompareTo(b.GetCustomAttribute<HivePostBuildAttribute>().Order));
+
+		foreach (MethodInfo step in steps)
+		{
+			//One plugin throwing is not a reason to lose the rest of the build
+			try
+			{
+				step.Invoke(null, new object[] { context });
+				Debug.Log("Hive post-build: ran " + step.DeclaringType?.Name + "." + step.Name);
+			}
+			catch (Exception e)
+			{
+				Debug.LogError("Hive post-build: " + step.DeclaringType?.Name + "." + step.Name + " failed: "
+							   + (e.InnerException ?? e));
+			}
+		}
+	}
+
+	/// Lays down the RemotePlay host, which RemotePlay's own step does not copy.
+	///
+	/// The 1.02.00 package ships HiveRemoteHost.exe but its post-build step lists everything except that,
+	/// so a build assembled purely by the vendor's script comes out without the host process it needs.
+	private static void CopyRemotePlayHost(string buildPath)
+	{
+		const string source = "Assets/HiveRemotePlay/Plugins/windows/HiveRemoteHost.exe";
+		if (!File.Exists(source))
+			return;
+
+		string destination = Path.Combine(buildPath, "plugins", "RemotePlay");
+		Directory.CreateDirectory(destination);
+		File.Copy(source, Path.Combine(destination, "HiveRemoteHost.exe"), true);
+
+		Debug.Log("Hive post-build: copied HiveRemoteHost.exe, which RemotePlay's own step leaves out");
 	}
 
 	private static void CopyDirectoryWithoutMeta(string sourcePath, string destPath)
