@@ -1,5 +1,4 @@
 using System;
-using System.Globalization;
 using UnityEngine;
 
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
@@ -13,28 +12,25 @@ using AOT;
 /// Three kinds of event come over the one callback:
 ///   Event   - the stream connecting and disconnecting
 ///   Message - chat the viewer typed, base64'd so it survives as utf-8
-///   Control - the viewer's key presses and touches, which is what actually drives the game
+///   Control - the viewer's key presses and touches
+///
+/// Control is ignored. The same input is already arriving as ordinary windows input: RemotePlay's
+/// HiveVirtualInput helper injects it with SendInput, onto the machine's own mouse and keyboard, so
+/// acting on the callback as well would deliver everything twice. See RemotePlaySession.
 ///
 /// Only the marshalling is windows-player-only: RemotePlayDll is laid down next to the built
 /// executable and resolved against the working directory, so the game has to be started from the
 /// build folder. Parsing stays platform-agnostic so it compiles and reads the same everywhere.
 public static class HiveRemotePlayEvents
 {
-	/// How much bigger the stream is than the game's own resolution.
-	///
-	/// One to one: the plugin reports touches in the same pixels the game renders in, which is what you
-	/// would expect of a streamer that captures the game's own swapchain. Tapping the four corners put
-	/// the extremes just inside 1680x1050, and Screen reads 1680x1050 to match.
-	///
-	/// Beware of measuring this against a win32 client rect. Windows virtualizes those for a process
-	/// that has not declared itself DPI aware, so at 150% scaling GetClientRect answers 1120x700 for the
-	/// same window - which reads as a 1.5x stream that is not there.
-	public static float StreamScale = 1f;
+	//Control events arrive continuously while somebody is playing, so their being ignored is said once
+	//rather than per event
+	private static bool s_SaidControlIsIgnored;
 
 	[RuntimeInitializeOnLoadMethod]
 	private static void Register()
 	{
-		RemotePlayInputRouter.Spawn();
+		RemotePlaySession.Spawn();
 
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
 		//RemotePlay keeps the pointer, and nothing else holds the delegate once we return, so it has
@@ -53,7 +49,7 @@ public static class HiveRemotePlayEvents
 #endif
 	}
 
-	/// Reads one payload and hands anything actionable to the router.
+	/// Reads one payload and hands anything actionable to the session.
 	///
 	/// The 'type' argument does not tell the three kinds apart on its own - chat arrives as 0, but both
 	/// status and control arrive as 1 - so the eventType field is what we branch on.
@@ -66,8 +62,17 @@ public static class HiveRemotePlayEvents
 
 		switch (eventType)
 		{
+			//Input comes in through windows, not through here. The event is still worth one thing: it means
+			//somebody is at the other end, which is how a game started into a live session finds out.
 			case "Control":
-				HandleControl(json);
+				if (!s_SaidControlIsIgnored)
+				{
+					s_SaidControlIsIgnored = true;
+					Debug.Log("RemotePlay: control events are arriving and are being ignored on purpose;"
+							  + " input comes in through windows from HiveVirtualInput");
+				}
+
+				RemotePlaySession.NoteActivity();
 				break;
 
 			case "Message":
@@ -79,12 +84,10 @@ public static class HiveRemotePlayEvents
 				string status = JsonUtility.FromJson<SimplePayload>(json)?.eventValue?.value;
 				Debug.Log("RemotePlay: status " + status);
 
-				//Control events keep arriving after the viewer has gone, so the router is told when a
-				//session is up and ignores them the rest of the time
 				if (status == "REMOTE_PLAY_CONNECTED")
-					RemotePlayInputRouter.SetConnected(true);
+					RemotePlaySession.SetConnected(true);
 				else if (status == "REMOTE_PLAY_DISCONNECTED")
-					RemotePlayInputRouter.SetConnected(false);
+					RemotePlaySession.SetConnected(false);
 
 				break;
 
@@ -92,94 +95,6 @@ public static class HiveRemotePlayEvents
 				Debug.Log("RemotePlay: unhandled event type " + type + ": " + json);
 				break;
 		}
-	}
-
-	//eventValue.value is an object here rather than the string the other two events carry, which is why
-	//control needs a shape of its own to deserialize into.
-	private static void HandleControl(string json)
-	{
-		ControlInner control = JsonUtility.FromJson<ControlPayload>(json)?.eventValue?.value;
-		if (control?.controlValue == null)
-			return;
-
-		string value = control.controlValue.value;
-		RemotePlayInputRouter.Phase phase;
-
-		switch (control.controlValue.action)
-		{
-			case "Down": phase = RemotePlayInputRouter.Phase.Down; break;
-			case "Move": phase = RemotePlayInputRouter.Phase.Move; break;
-			case "Up": phase = RemotePlayInputRouter.Phase.Up; break;
-			//The pointer left the streamed view. Whatever it was holding has to be let go, or the button
-			//stays down for good and the camera gate never closes.
-			case "Out": phase = RemotePlayInputRouter.Phase.Cancel; break;
-			default:
-				Debug.Log("RemotePlay: unhandled control action " + control.controlValue.action + ": " + json);
-				return;
-		}
-
-		switch (control.controlType)
-		{
-			//A windows virtual-key code in hex. Presses overlap, so the router tracks a set of held keys
-			//rather than a single one.
-			case "Key":
-				if (TryParseHex(value, out int keyCode))
-					RemotePlayInputRouter.EnqueueKey(keyCode, phase);
-				else
-					Debug.LogWarning("RemotePlay: could not read key code " + value);
-				break;
-
-			//"X#Y" in stream space. This is a touch, not a mouse: no button to speak of, and no movement
-			//outside a Down..Up pair.
-			case "Click":
-				if (TryParsePoint(value, out Vector2 point))
-					RemotePlayInputRouter.EnqueueTouch(point, phase);
-				else
-					Debug.LogWarning("RemotePlay: could not read touch point " + value);
-				break;
-
-			//Same "X#Y" as a touch, but the point is only where the pointer sat and the action is the
-			//direction scrolled. One event is one notch, and holding a scroll repeats it.
-			case "Wheel":
-				if (TryParsePoint(value, out Vector2 wheelPoint))
-					RemotePlayInputRouter.EnqueueWheel(wheelPoint, phase);
-				else
-					Debug.LogWarning("RemotePlay: could not read wheel point " + value);
-				break;
-
-			default:
-				Debug.Log("RemotePlay: unhandled control type " + control.controlType + ": " + json);
-				break;
-		}
-	}
-
-	private static bool TryParseHex(string value, out int result)
-	{
-		result = 0;
-		if (string.IsNullOrEmpty(value))
-			return false;
-
-		string digits = value.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? value.Substring(2) : value;
-		return int.TryParse(digits, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out result);
-	}
-
-	private static bool TryParsePoint(string value, out Vector2 result)
-	{
-		result = Vector2.zero;
-		if (string.IsNullOrEmpty(value))
-			return false;
-
-		string[] parts = value.Split('#');
-		if (parts.Length != 2)
-			return false;
-
-		//Invariant culture because the payload always uses a dot, whatever the machine is set to
-		if (!float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x)
-			|| !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y))
-			return false;
-
-		result = new Vector2(x, y);
-		return true;
 	}
 
 	private static string DecodeMessage(string value)
@@ -240,32 +155,6 @@ public static class HiveRemotePlayEvents
 
 	[Serializable]
 	private class SimpleValue
-	{
-		public string value;
-		public string action;
-	}
-
-	[Serializable]
-	private class ControlPayload
-	{
-		public ControlOuter eventValue;
-	}
-
-	[Serializable]
-	private class ControlOuter
-	{
-		public ControlInner value;
-	}
-
-	[Serializable]
-	private class ControlInner
-	{
-		public string controlType;
-		public ControlDetail controlValue;
-	}
-
-	[Serializable]
-	private class ControlDetail
 	{
 		public string value;
 		public string action;
